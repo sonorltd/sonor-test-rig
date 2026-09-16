@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+# sonor-rig — one Pi, every Sonor project.
+#
+# A thin switcher over each project's OWN dedicated-Pi installer, so one bench Pi can host
+# Pixel Conductor, the Fractal Rig, the C-Bus daemon, the eDIN+ bridge … side by side, and
+# the touch panel / HDMI can be pointed at whichever one is being worked on.
+#
+#   sonor-rig list                      what is installed / running / healthy
+#   sonor-rig install <app|all>         clone (or pull) + run the app's own installer
+#   sonor-rig use <app>                 make it the FRONT app: touch panel shows its UI, its display program runs
+#   sonor-rig only <app>                use <app> and stop every other app's services
+#   sonor-rig all                       start every installed app's services (the screen stays on the front app)
+#   sonor-rig start|stop|restart <app>  its systemd units
+#   sonor-rig enable|disable <app>      start-on-boot or not
+#   sonor-rig logs <app>                follow its journal
+#   sonor-rig update <app|all>          git pull + re-run its installer (idempotent)
+#   sonor-rig ports                     every declared port + who is actually listening + clashes
+#   sonor-rig doctor                    Pi health: throttling, temp, displays, serial adapters, deps
+#   sonor-rig add <name>                scaffold apps.d/<name>.app for a new project
+#   sonor-rig session                   (internal) the desktop-session loop started at login
+#
+# Apps are declared in apps.d/<name>.app (plain bash variables — see apps.d/TEMPLATE.app).
+# Field Pis never see this script: they run each project's installer directly.
+set -euo pipefail
+
+RIG_VERSION="0.1.0"
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+RIG_HOME="$(cd "$(dirname "$SELF")" && pwd)"
+APPS_D="$RIG_HOME/apps.d"
+ETC="/etc/sonor-rig"
+
+RIG_USER="${SUDO_USER:-$(id -un)}"
+RIG_USER_HOME="$(getent passwd "$RIG_USER" | cut -d: -f6)"
+RIG_ROOT="${RIG_ROOT:-$RIG_USER_HOME/sonor}"          # every app is cloned under here
+RIG_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"; RIG_IP="${RIG_IP:-localhost}"
+
+# ── colours ────────────────────────────────────────────────────────────────────────
+if [ -t 1 ]; then B=$'\e[1m'; D=$'\e[2m'; G=$'\e[32m'; Y=$'\e[33m'; R=$'\e[31m'; C=$'\e[36m'; N=$'\e[0m'; else B=; D=; G=; Y=; R=; C=; N=; fi
+say()  { printf '%s\n' "$*"; }
+ok()   { printf '%s✔%s %s\n' "$G" "$N" "$*"; }
+warn() { printf '%s!%s %s\n' "$Y" "$N" "$*" >&2; }
+die()  { printf '%s✘ %s%s\n' "$R" "$*" "$N" >&2; exit 1; }
+hr()   { printf '%s%s%s\n' "$D" "──────────────────────────────────────────────────────────────" "$N"; }
+
+need_root() { [ "$(id -u)" -eq 0 ] || exec sudo "$SELF" "$@"; }   # RIG_ROOT is re-derived from SUDO_USER's home
+as_user()   { if [ "$(id -u)" -eq 0 ]; then sudo -u "$RIG_USER" -H bash -lc "$*"; else bash -lc "$*"; fi; }
+
+# ── app files ──────────────────────────────────────────────────────────────────────
+all_apps() { local f; for f in "$APPS_D"/*.app; do [ -e "$f" ] || continue; f="$(basename "$f" .app)"; [ "$f" = TEMPLATE ] || printf '%s\n' "$f"; done; }
+
+# Source apps.d/<name>.app into the current shell. The app's env file and rig.env are
+# sourced FIRST so URL / SESSION / DROPIN can use ${WEB_PORT}, ${RENDER_DISPLAY}, ${RIG_IP} …
+load_app() {
+  local name="$1"
+  [ -f "$APPS_D/$name.app" ] || die "no such app '$name' — apps: $(all_apps | tr '\n' ' ')"
+  NAME=""; LABEL=""; REPO=""; BRANCH=""; DIR=""; INSTALL=""; UNITS=""; URL=""; HEALTH=""; PORTS=""; NOTES=""; SESSION=""; DROPIN=""; UNIT_FILE=""; ENV_DEFAULT=""
+  unset -f post_install 2>/dev/null || true
+  # shellcheck disable=SC1090
+  [ -f "$ETC/rig.env" ] && . "$ETC/rig.env"
+  # shellcheck disable=SC1090
+  [ -f "$ETC/$name.env" ] && . "$ETC/$name.env"
+  DIR="$name"; APP_PATH="$RIG_ROOT/$name"
+  # shellcheck disable=SC1090
+  . "$APPS_D/$name.app"
+  [ "${NAME:-}" = "$name" ] || die "$name.app: NAME must be '$name' (got '${NAME:-}')"
+  DIR="${DIR:-$name}"; APP_PATH="$RIG_ROOT/$DIR"
+  [ -n "$UNITS" ] || warn "$name.app declares no UNITS"
+  FIRST_UNIT="${UNITS%% *}"
+}
+
+is_installed() { [ -d "$APP_PATH" ] && ( [ -z "$UNITS" ] || [ -f "/etc/systemd/system/$FIRST_UNIT.service" ] || systemctl cat "$FIRST_UNIT.service" >/dev/null 2>&1 ); }
+unit_state()   { systemctl is-active "$1" 2>/dev/null || true; }
+unit_enabled() { systemctl is-enabled "$1" 2>/dev/null || true; }
+health() {
+  [ -n "$HEALTH" ] || { echo "-"; return; }
+  local code; code="$(curl -s -m 2 -o /dev/null -w '%{http_code}' "$HEALTH" 2>/dev/null || true)"
+  case "$code" in 2*|3*) echo "ok";; 000|"") echo "down";; *) echo "http $code";; esac
+}
+front_app() { cat "$ETC/current" 2>/dev/null || true; }
+
+# ── install / update ───────────────────────────────────────────────────────────────
+git_sync() {   # clone or fast-forward, as the rig user
+  as_user "mkdir -p '$RIG_ROOT'"
+  if [ -d "$APP_PATH/.git" ]; then
+    say "  git pull  $APP_PATH"
+    as_user "cd '$APP_PATH' && git pull --ff-only ${BRANCH:+origin $BRANCH}" || warn "git pull failed (local changes? private repo auth?) — continuing with what's there"
+  elif [ -d "$APP_PATH" ]; then
+    say "  $APP_PATH exists but is not a git checkout (copied in by hand?) — using it as-is"
+  else
+    [ -n "$REPO" ] || die "$NAME: no REPO and $APP_PATH does not exist — copy the project there by hand"
+    say "  git clone $REPO → $APP_PATH"
+    as_user "git clone -q ${BRANCH:+-b $BRANCH} '$REPO' '$APP_PATH'" || die "clone failed. Private repo? Either 'gh auth login' / a deploy key on this Pi, or from the Mac:  scp -r <project> $RIG_USER@$(hostname).local:$APP_PATH"
+  fi
+}
+
+write_env_default() {
+  mkdir -p "$ETC"
+  if [ -n "$ENV_DEFAULT" ] && [ ! -f "$ETC/$NAME.env" ]; then
+    printf '%s\n' "$ENV_DEFAULT" > "$ETC/$NAME.env"; say "  wrote $ETC/$NAME.env (edit for real hardware)"
+  fi
+}
+
+write_units() {
+  if [ -n "$UNIT_FILE" ]; then
+    printf '%s\n' "$UNIT_FILE" > "/etc/systemd/system/$FIRST_UNIT.service"; say "  wrote /etc/systemd/system/$FIRST_UNIT.service"
+  fi
+  if [ -n "$DROPIN" ]; then
+    mkdir -p "/etc/systemd/system/$FIRST_UNIT.service.d"
+    printf '%s\n' "$DROPIN" > "/etc/systemd/system/$FIRST_UNIT.service.d/sonor-rig.conf"; say "  wrote drop-in $FIRST_UNIT.service.d/sonor-rig.conf"
+  fi
+  systemctl daemon-reload
+}
+
+cmd_install() {
+  need_root install "$@"
+  local targets=("${@:-all}"); [ "${targets[0]}" = all ] && mapfile -t targets < <(all_apps)
+  for a in "${targets[@]}"; do
+    load_app "$a"
+    say "${B}== install $LABEL ($NAME)${N}"
+    git_sync
+    write_env_default            # env first — installers / drop-ins may read it
+    if [ -n "$INSTALL" ]; then
+      say "  running the project's own installer:  $INSTALL"
+      ( cd "$APP_PATH" && export SUDO_USER="$RIG_USER" RIG_USER APP_PATH && bash -c "$INSTALL" ) || die "$NAME: installer failed"
+    fi
+    write_units
+    if declare -f post_install >/dev/null; then say "  post_install"; post_install; fi
+    [ -z "$UNITS" ] || { systemctl enable "$UNITS" >/dev/null 2>&1 || true; systemctl restart "$UNITS" || warn "$NAME: unit(s) failed to start — sonor-rig logs $NAME"; }
+    [ -z "$NOTES" ] || say "  ${D}note: $NOTES${N}"
+    ok "$LABEL installed"
+  done
+  if [ ! -f "$ETC/current" ]; then load_app "${targets[0]}"; [ -z "$URL" ] || cmd_use "$NAME"; fi
+}
+cmd_update() { cmd_install "$@"; }
+
+# ── run control ────────────────────────────────────────────────────────────────────
+cmd_units() {  # start|stop|restart|enable|disable <app>
+  local action="$1"; shift; need_root "$action" "$@"
+  [ $# -ge 1 ] || die "usage: sonor-rig $action <app>"
+  for a in "$@"; do load_app "$a"; [ -n "$UNITS" ] || { warn "$NAME has no units"; continue; }
+    case "$action" in enable) systemctl enable --now $UNITS;; disable) systemctl disable --now $UNITS;; *) systemctl "$action" $UNITS;; esac
+    ok "$action $LABEL ($UNITS)"; done
+}
+
+cmd_use() {
+  need_root use "$@"
+  local a="${1:-}"; [ -n "$a" ] || die "usage: sonor-rig use <app>   (apps: $(all_apps | tr '\n' ' '))"
+  load_app "$a"
+  is_installed || die "$LABEL is not installed — sonor-rig install $NAME"
+  [ -n "$URL" ] || die "$LABEL is headless (no URL) — it can run in the background (sonor-rig start $NAME, sonor-rig logs $NAME) but can't be the front app"
+  [ -z "$UNITS" ] || systemctl start $UNITS || warn "$NAME units did not start — sonor-rig logs $NAME"
+  mkdir -p "$ETC"; printf '%s\n' "$NAME" > "$ETC/current"; printf '%s\n' "$URL" > "$ETC/kiosk.url"
+  ok "front app → $LABEL   $URL"
+  say "  ${D}the touch panel switches within a couple of seconds (the session loop watches $ETC/current)${N}"
+}
+
+cmd_only() {
+  need_root only "$@"
+  local keep="${1:-}"; [ -n "$keep" ] || die "usage: sonor-rig only <app>"
+  for a in $(all_apps); do [ "$a" = "$keep" ] && continue; load_app "$a"; [ -z "$UNITS" ] || systemctl stop $UNITS 2>/dev/null || true; done
+  cmd_use "$keep"
+}
+cmd_all() { need_root all; for a in $(all_apps); do load_app "$a"; is_installed && [ -n "$UNITS" ] && { systemctl start $UNITS && ok "started $LABEL" || warn "$LABEL failed to start"; }; done; }
+
+cmd_logs() { local a="${1:-}"; [ -n "$a" ] || die "usage: sonor-rig logs <app>"; load_app "$a"; [ -n "$UNITS" ] || die "$NAME has no units"; local args=(); for u in $UNITS; do args+=(-u "$u"); done; exec journalctl -f -n 80 "${args[@]}"; }
+
+# ── status ─────────────────────────────────────────────────────────────────────────
+cmd_list() {
+  local front; front="$(front_app)"
+  printf '%s%-9s %-24s %-10s %-9s %-8s %s%s\n' "$B" "app" "project" "installed" "state" "health" "url" "$N"
+  for a in $(all_apps); do
+    load_app "$a"
+    local inst="no" st="-" hb="-" mark=" "
+    is_installed && inst="yes"
+    [ -n "$UNITS" ] && st="$(unit_state "$FIRST_UNIT")"
+    [ "$inst" = yes ] && hb="$(health)"
+    [ "$a" = "$front" ] && mark="${C}▶${N}"
+    printf '%s %-7s %-24s %-10s %-9s %-8s %s\n' "$mark" "$a" "$LABEL" "$inst" "$st" "$hb" "${URL:-headless}"
+  done
+  [ -z "$front" ] || say "${D}▶ = front app (touch panel). Switch: sonor-rig use <app>${N}"
+}
+cmd_status() {
+  say "${B}sonor-rig v$RIG_VERSION${N}  $(hostname)  $RIG_IP  apps in $RIG_ROOT"; hr
+  cmd_list; hr
+  local t; t="$(vcgencmd measure_temp 2>/dev/null | tr -d 'temp=' || true)"; local th; th="$(vcgencmd get_throttled 2>/dev/null | cut -d= -f2 || true)"
+  say "temp ${t:-?}   throttled ${th:-?} (0x0 = fine)   load $(cut -d' ' -f1-3 /proc/loadavg)   mem $(free -m | awk '/Mem:/{print $3"/"$2" MB"}')"
+  [ ! -f "$ETC/kiosk.url" ] || say "kiosk → $(cat "$ETC/kiosk.url")"
+}
+
+cmd_ports() {
+  say "${B}declared ports${N}"
+  for a in $(all_apps); do load_app "$a"; printf '  %-8s %s\n' "$a" "${PORTS:-?}"; done; hr
+  say "${B}listening now${N}"
+  if command -v ss >/dev/null; then ss -Hltnup 2>/dev/null | awk '{printf "  %-5s %-28s %s\n",$1,$5,$7}' | sort -u
+  elif command -v netstat >/dev/null; then netstat -ltnup 2>/dev/null | awk 'NR>2{printf "  %-5s %-28s %s\n",$1,$4,$7}' | sort -u
+  else say "  (ss/netstat not available)"; fi
+  hr; say "${B}clash check${N} (listen ports declared by more than one app)"
+  local clashes; clashes="$(for a in $(all_apps); do load_app "$a"; printf '%s\n' "$PORTS" | sed 's/out→[^·]*//g' | grep -oE '[0-9]{2,5}/(tcp|udp)' | sed "s/^/$a /"; done | awk '{p[$2]=p[$2]" "$1; n[$2]++} END{for(k in n) if(n[k]>1) print "  "k":"p[k]}')"
+  if [ -n "$clashes" ]; then printf '%s%s%s\n' "$R" "$clashes" "$N"; else ok "none"; fi
+}
+
+cmd_doctor() {
+  say "${B}sonor-rig doctor${N}"; hr
+  for c in git curl python3 chromium wlr-randr vcgencmd; do if command -v "$c" >/dev/null || { [ "$c" = chromium ] && command -v chromium-browser >/dev/null; }; then ok "$c"; else warn "$c missing"; fi; done
+  local th; th="$(vcgencmd get_throttled 2>/dev/null | cut -d= -f2 || true)"; th="${th:-?}"
+  if [ "$th" = "0x0" ]; then ok "power: not throttled"; else warn "power/thermal flags $th (0x50000 = was throttled earlier; 0x50005 = under-voltage NOW — use the 27W PSU)"; fi
+  say "displays:"; { wlr-randr 2>/dev/null || xrandr 2>/dev/null || echo "  (no compositor in this shell — run from the desktop session)"; } | grep -E '^[A-Z]|current|\*|compositor' | sed 's/^/  /' || true
+  say "serial adapters (C-Bus 5500PC / FTDI):"; if [ -d /dev/serial/by-id ]; then ls -l /dev/serial/by-id/ | sed 's/^/  /'; else say "  none"; fi
+  say "session loop:"; if pgrep -af "sonor-rig-session" >/dev/null; then ok "running (front: $(front_app))"; else warn "not running — log in on the desktop, or: sudo bash $RIG_HOME/install.sh --session-only"; fi
+  say "apps:"; cmd_list
+}
+
+# ── scaffold ───────────────────────────────────────────────────────────────────────
+cmd_add() {
+  local name="${1:-}"; [ -n "$name" ] || die "usage: sonor-rig add <name>"
+  [ -f "$APPS_D/$name.app" ] && die "$name.app already exists"
+  sed "s/__NAME__/$name/g" "$APPS_D/TEMPLATE.app" > "$APPS_D/$name.app"
+  ok "wrote apps.d/$name.app — fill in REPO / INSTALL / UNITS / URL, then: sonor-rig install $name"
+}
+
+# ── desktop session loop (runs as the desktop user, started at login) ──────────────
+cmd_session() {
+  exec "$RIG_HOME/session/sonor-rig-session.sh"
+}
+
+# ── main ───────────────────────────────────────────────────────────────────────────
+cmd="${1:-status}"; shift || true
+case "$cmd" in
+  list|ls)            cmd_list "$@";;
+  status|st)          cmd_status "$@";;
+  install|i)          cmd_install "$@";;
+  update|up)          cmd_update "$@";;
+  use|front)          cmd_use "$@";;
+  only)               cmd_only "$@";;
+  all)                cmd_all "$@";;
+  start|stop|restart|enable|disable) cmd_units "$cmd" "$@";;
+  logs|log)           cmd_logs "$@";;
+  ports)              cmd_ports "$@";;
+  doctor|doc)         cmd_doctor "$@";;
+  add)                cmd_add "$@";;
+  session)            cmd_session "$@";;
+  version|-v|--version) say "sonor-rig $RIG_VERSION";;
+  help|-h|--help)     sed -n '2,24p' "$SELF" | sed 's/^# \{0,1\}//';;
+  *)                  die "unknown command '$cmd' — sonor-rig help";;
+esac
