@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sonor Test Rig — bench Pi 5 build guide</title>
+<meta name="description" content="Step-by-step build guide for the Sonor studio test rig: one Raspberry Pi 5 hosting Pixel Conductor, Fractal Rig, the C-Bus daemon and the eDIN+ bridge, switchable from a 7-inch touch panel.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0c10; --panel: #13151c; --panel2: #191c25; --line: #262a37;
+    --text: #e8e9ee; --muted: #8b90a3; --accent: #8058a1; --accent2: #4bb9d3;
+    --ok: #78ba57; --warn: #f5d05c; --bad: #ec6061; --pink: #e67eb1;
+    --font: 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif;
+    --mono: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px; line-height: 1.55; }
+  a { color: var(--accent2); text-decoration: none; } a:hover { text-decoration: underline; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .hwrap { max-width: 1040px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .logo { font-weight: 700; letter-spacing: .12em; font-size: 13px; } .logo span { color: var(--accent2); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .strip { display: flex; gap: 2px; height: 3px; } .strip i { flex: 1; display: block; }
+  nav.toc { max-width: 1040px; margin: 0 auto; padding: 8px 16px 0; display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { font-size: 12px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); color: var(--text); }
+  nav.toc a:hover { border-color: var(--accent); text-decoration: none; }
+  main { max-width: 1040px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 30px; margin: 10px 0 6px; line-height: 1.15; }
+  .lead { color: var(--muted); font-size: 16px; max-width: 760px; margin: 0 0 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin: 18px 0; }
+  .card h2 { margin: 0 0 12px; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 500; display: flex; align-items: center; gap: 10px; }
+  .card h2 .n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; font-family: var(--mono); font-size: 12px; }
+  h3 { font-size: 16px; margin: 18px 0 6px; }
+  p { margin: 8px 0; }
+  ul, ol { margin: 6px 0 6px 22px; padding: 0; } li { margin: 4px 0; }
+  code { font-family: var(--mono); font-size: 13px; background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
+  pre { position: relative; background: #08090c; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.5; margin: 10px 0; }
+  pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+  pre .c { color: var(--muted); }
+  pre .copy { position: absolute; top: 8px; right: 8px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); border-radius: 6px; font: 11px var(--font); padding: 3px 8px; cursor: pointer; }
+  pre .copy:hover { border-color: var(--accent2); color: var(--text); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  .tablewrap { overflow-x: auto; }
+  .note { border-left: 3px solid var(--accent2); padding: 8px 12px; background: var(--panel2); border-radius: 0 8px 8px 0; margin: 10px 0; color: var(--text); }
+  .note.warn { border-color: var(--warn); } .note.bad { border-color: var(--bad); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); } .muted { color: var(--muted); }
+  kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--panel2); }
+  .check { list-style: none; margin-left: 0; } .check li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .check input { margin-top: 5px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+  .diagram { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; font-family: var(--mono); font-size: 12px; margin: 12px 0; }
+  .box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel2); }
+  .box b { display: block; font-family: var(--font); font-size: 14px; margin-bottom: 4px; }
+  .pi { border-color: var(--accent); text-align: center; }
+  .arrow { color: var(--muted); text-align: center; }
+  @media (max-width: 720px) { .diagram { grid-template-columns: 1fr; } .arrow { transform: rotate(90deg); } }
+  footer { max-width: 1040px; margin: 0 auto; padding: 20px 16px 40px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
+  @media print { header, nav.toc, .copy { display: none; } body { background: #fff; color: #000; } .card, pre, code { background: #fff; border-color: #ccc; } .card h2, .muted { color: #555; } a { color: #000; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="strip"><i style="background:#8058a1"></i><i style="background:#4bb9d3"></i><i style="background:#78ba57"></i><i style="background:#f5d05c"></i><i style="background:#ec6061"></i><i style="background:#e67eb1"></i><i style="background:#5b7fd6"></i><i style="background:#e8924a"></i><i style="background:#3ea89b"></i><i style="background:#b3b8c8"></i></div>
+  <div class="hwrap">
+    <div class="logo">SONOR <span>STUDIO</span> · TEST RIG</div>
+    <span class="pill">sonor-rig</span>
+    <span class="pill">Pi 5 · 8 GB</span>
+    <span style="flex:1"></span>
+    <a class="pill" href="https://github.com/sonorltd/sonor-test-rig">github.com/sonorltd/sonor-test-rig</a>
+  </div>
+  <nav class="toc">
+    <a href="#what">What you're building</a><a href="#parts">Parts</a><a href="#cabling">Cabling</a><a href="#image">1 · Image</a><a href="#boot">2 · First boot</a><a href="#install">3 · Install</a><a href="#private">4 · Private repos</a><a href="#verify">5 · Verify</a><a href="#drive">Driving it</a><a href="#config">Config files</a><a href="#apps">The apps</a><a href="#ports">Ports</a><a href="#screens">Two screens</a><a href="#trouble">Troubleshooting</a><a href="#next">Adding a project</a><a href="#handover">Handover checklist</a>
+  </nav>
+</header>
+
+<main>
+  <h1>Bench Pi 5 build guide</h1>
+  <p class="lead">One Raspberry Pi 5 that hosts every Sonor studio project side by side — Pixel Conductor, the Fractal Rig, the C-Bus daemon and the eDIN+ bridge — with a 7" touch panel and an HDMI output pointed at whichever one is being worked on. This page is the complete set of instructions for building it from a blank SD card. Allow about an hour, most of it waiting for installs.</p>
+
+  <div class="card" id="what">
+    <h2>What you're building</h2>
+    <div class="diagram">
+      <div class="box"><b>7" touch panel</b>ROADOM 1024×600<br>HDMI-A-1 + USB touch<br><span class="muted">Chromium kiosk → front app's UI</span></div>
+      <div class="box pi"><b>Raspberry Pi 5</b>Pi OS 64-bit with desktop<br>hostname <code>sonor-rig</code><br><span class="muted">all four daemons running at once</span><br><span class="muted">Ethernet → studio switch</span></div>
+      <div class="box"><b>Projector / TV</b>HDMI-A-2<br><span class="muted">Fractal Rig renderer, fullscreen, when Fractal is the front app</span></div>
+    </div>
+    <p>Each project is installed <em>exactly</em> as it would be on its own dedicated Pi (the rig runs each project's own installer). A thin layer called <code>sonor-rig</code> sits on top: it clones and installs the projects, keeps their services running, and switches which one owns the touch panel and the second screen. Switching is one command — <code>sonor-rig use fractal</code> — and nothing else stops.</p>
+    <div class="note">Field Pis on customer sites stay <b>one app per Pi</b> and never see this repo. The rig is a bench tool.</div>
+  </div>
+
+  <div class="card" id="parts">
+    <h2>Parts</h2>
+    <div class="tablewrap"><table>
+      <tr><th>Item</th><th>Notes</th></tr>
+      <tr><td>Raspberry Pi 5, <b>8 GB</b></td><td>4 GB would do; 8 GB leaves room for projectM + NDI. Fit the official <b>active cooler</b>.</td></tr>
+      <tr><td><b>27 W USB-C PSU</b> (official Pi 5 supply)</td><td>Under-voltage throttles the GPU first. A phone charger will "work" and then misbehave — <code>sonor-rig doctor</code> shows the throttle flag.</td></tr>
+      <tr><td>microSD, 32 GB or larger, A2 rated</td><td>64 GB is fine. Class A2 matters more than size.</td></tr>
+      <tr><td>ROADOM 7" 1024×600 IPS touch panel</td><td>HDMI for picture, USB for touch. Any 1024×600 HDMI touch panel works — that size is baked into <code>rig.env</code>.</td></tr>
+      <tr><td>Projector or TV with HDMI</td><td>For the Fractal renderer. Optional for the first build — see <a href="#screens">Two screens</a> for testing with just the panel.</td></tr>
+      <tr><td>2 × micro-HDMI → HDMI leads</td><td>The Pi 5 has micro-HDMI sockets.</td></tr>
+      <tr><td>Ethernet to the studio switch</td><td>Strongly preferred over Wi-Fi: the Pi needs to see the WLED nodes and any DJ gear, and Wi-Fi routers often throttle multicast.</td></tr>
+      <tr><td>A Mac or PC with Raspberry Pi Imager</td><td>Plus SSH access to the same network as the Pi.</td></tr>
+    </table></div>
+    <h3>Optional hardware (leave the simulators on without it)</h3>
+    <ul>
+      <li>Gledopto / WLED pixel nodes on the same LAN (Pixel Conductor). Without them set <code>ARGS=--simulate</code> in <code>/etc/sonor-rig/pixel.env</code>.</li>
+      <li>C-Bus: a 5500PC via FTDI USB-serial (<code>/dev/ttyUSB0</code>) or a 5500CN2 on the LAN. Without one the daemon runs its simulator.</li>
+      <li>USB audio interface (Fractal master <code>--audio</code>, Pixel Conductor audio input); Pioneer DJ gear on the LAN for Pro DJ Link beat sync.</li>
+    </ul>
+  </div>
+
+  <div class="card" id="cabling">
+    <h2>Cabling</h2>
+    <ol>
+      <li><b>Touch panel → HDMI-A-1.</b> That is the micro-HDMI socket <em>next to the USB-C power socket</em>. Also plug the panel's USB lead into any USB port (touch input).</li>
+      <li><b>Projector / TV → HDMI-A-2</b> (the other micro-HDMI).</li>
+      <li><b>Ethernet</b> to the studio switch.</li>
+      <li>Any FTDI / USB-serial or USB audio you have to hand.</li>
+      <li><b>Power last</b>, once the card is in.</li>
+    </ol>
+    <div class="note warn">Which HDMI is which matters: the kiosk lands on the first output and the Fractal renderer goes to the second. If they come up swapped it is a one-line fix (<a href="#screens">Two screens</a>), but getting the cables right first saves the head-scratching.</div>
+  </div>
+
+  <div class="card" id="image">
+    <h2><span class="n">1</span> Image the SD card</h2>
+    <p>Open <b>Raspberry Pi Imager</b> on the Mac/PC.</p>
+    <ul>
+      <li>Device: <b>Raspberry Pi 5</b>.</li>
+      <li>OS: <b>Raspberry Pi OS (64-bit)</b> — the one <em>with desktop</em>, Bookworm or later. <b>Not "Lite"</b>: the Fractal renderer and a Chromium kiosk cannot share the GPU on Lite (KMSDRM allows one owner); under the desktop compositor both are ordinary windows on two outputs.</li>
+      <li>When asked "Would you like to apply OS customisation settings?" → <b>Edit settings</b>:
+        <ul>
+          <li>Hostname: <code>sonor-rig</code></li>
+          <li>Username: <code>pi</code>, choose a password (write it on the handover sheet)</li>
+          <li>Wi-Fi: only if there is no Ethernet; set country <b>GB</b></li>
+          <li>Locale: timezone <code>Europe/London</code>, keyboard <code>gb</code></li>
+          <li>Services tab: <b>Enable SSH</b>, password authentication</li>
+        </ul>
+      </li>
+      <li>Write, then put the card in the Pi and power up. First boot takes a minute or two; the desktop appears on the panel.</li>
+    </ul>
+  </div>
+
+  <div class="card" id="boot">
+    <h2><span class="n">2</span> First boot — update and fetch the rig</h2>
+    <p>From the Mac/PC terminal (the Pi must be on the same network):</p>
+<pre><button class="copy">copy</button><code>ssh pi@sonor-rig.local
+sudo apt update &amp;&amp; sudo apt full-upgrade -y &amp;&amp; sudo apt install -y git
+mkdir -p ~/sonor &amp;&amp; git clone https://github.com/sonorltd/sonor-test-rig.git ~/sonor/test-rig
+cd ~/sonor/test-rig</code></pre>
+    <p class="muted">If <code>sonor-rig.local</code> does not resolve, find the Pi's IP on the router (or on the Pi's desktop: hover the network icon) and use <code>ssh pi@&lt;ip&gt;</code>. The <code>full-upgrade</code> can take 10–15 minutes on a fresh image; a reboot after it is fine but not required.</p>
+  </div>
+
+  <div class="card" id="install">
+    <h2><span class="n">3</span> Install the apps</h2>
+<pre><button class="copy">copy</button><code>sudo bash install.sh --apps pixel,fractal --front pixel
+sudo reboot</code></pre>
+    <p>This one command, which is safe to re-run at any time:</p>
+    <ul>
+      <li>installs the base packages (git, python venv, build tools, Chromium, <code>wlr-randr</code>, <code>unclutter</code>, <code>libportaudio2</code>);</li>
+      <li>links the <code>sonor-rig</code> command into <code>/usr/local/bin</code> and creates <code>/etc/sonor-rig/rig.env</code>;</li>
+      <li>clones <b>Pixel Conductor</b> and <b>Fractal Rig</b> into <code>~/sonor/&lt;app&gt;/</code> and runs each project's <em>own</em> installer (Pixel: <code>setup/install-pi.sh</code>; Fractal: <code>setup/install.sh master</code>, which builds the renderer and the master's Python venv);</li>
+      <li>applies the only rig-specific tweaks, as systemd drop-ins: the Fractal web UI moves to port <b>8081</b> (the C-Bus daemon needs 8080) and the Fractal renderer runs inside the desktop session instead of as the shipped KMSDRM service;</li>
+      <li>sets up the desktop autostart: a Chromium kiosk on the front app's URL plus that app's display program.</li>
+    </ul>
+    <p>Expect 15–30 minutes: the Fractal installer compiles the renderer and both projects build Python environments. After the reboot the <b>panel boots straight into Pixel Conductor's Perform mode</b> (big touch buttons). Tap <b>Exit</b> on it for the full micro-control UI.</p>
+    <div class="note">Do <b>not</b> use the projects' <code>install-kiosk.sh</code> scripts on the rig — the rig's own session handles the kiosk. Those scripts are for dedicated field Pis.</div>
+    <h3>If the Fractal Rig clone fails</h3>
+    <p>The <code>sonor-fractal-rig</code> repository may be private. If <code>install.sh</code> reports it cannot clone it, either sign the Pi into GitHub first (<code>sudo apt install gh &amp;&amp; gh auth login</code>, then re-run the install command), or copy the project over from the Mac and re-run — the installer uses whatever it finds in place:</p>
+<pre><button class="copy">copy</button><code>scp -r "$HOME/Code/Sonor/STUDIO - Fractal Rig" pi@sonor-rig.local:~/sonor/fractal-rig
+ssh pi@sonor-rig.local sonor-rig install fractal</code></pre>
+  </div>
+
+  <div class="card" id="private">
+    <h2><span class="n">4</span> The private repos — C-Bus and eDIN+</h2>
+    <p><code>sonor-cbus</code> is a private repository, so <code>sonor-rig install cbus</code> needs Git authentication on the Pi (<code>gh auth login</code>, or a deploy key). The simpler route is to copy it across from the Mac and let the installer use the copy:</p>
+<pre><button class="copy">copy</button><code>scp -r "$HOME/Code/Sonor/APP - C-Bus" pi@sonor-rig.local:~/sonor/cbus
+ssh pi@sonor-rig.local sonor-rig install cbus</code></pre>
+    <p>The C-Bus daemon starts in <b>simulator</b> mode. For a real PCI, edit <code>/etc/sonor-rig/cbus.env</code> and restart:</p>
+<pre><button class="copy">copy</button><code><span class="c"># 5500PC on an FTDI USB-serial adapter</span>
+ARGS=--serial /dev/ttyUSB0 --port 8765 --auth
+<span class="c"># or a 5500CN2 on the LAN</span>
+ARGS=--tcp 192.168.1.50:10001 --port 8765 --auth</code></pre>
+<pre><button class="copy">copy</button><code>sonor-rig restart cbus</code></pre>
+    <p>The C-Bus bundled web app only auto-connects when opened by the Pi's <b>LAN IP</b>, not <code>localhost</code>: <code>http://&lt;rig-ip&gt;:8080/</code>.</p>
+    <p>The eDIN+ ↔ C-Bus bridge is headless (nothing to show on the panel) and also defaults to its built-in simulator. Install it whenever it is wanted:</p>
+<pre><button class="copy">copy</button><code>sonor-rig install edin
+sonor-rig logs edin</code></pre>
+    <p class="muted">C-Gate (Java) is not installed by the rig — a real eDIN+/C-Bus network needs it separately; see the bridge's own README.</p>
+  </div>
+
+  <div class="card" id="verify">
+    <h2><span class="n">5</span> Verify</h2>
+<pre><button class="copy">copy</button><code>sonor-rig list      <span class="c"># installed / running / healthy — ▶ marks what is on the panel</span>
+sonor-rig doctor    <span class="c"># throttling, temperature, displays, FTDI adapters, session loop</span>
+sonor-rig ports     <span class="c"># declared ports · what is actually listening · clashes</span></code></pre>
+    <p>What good looks like: <code>list</code> shows every installed app <span class="ok">running</span> and <span class="ok">healthy</span>; <code>doctor</code> shows throttle flag <code>0x0</code>, temperature comfortably under 70 °C, two displays and the session loop alive; <code>ports</code> shows no clash. Then from any laptop or phone on the same network:</p>
+    <ul>
+      <li>Pixel Conductor full UI: <code>http://sonor-rig.local:8760/</code></li>
+      <li>Fractal Rig full UI: <code>http://sonor-rig.local:8081/</code> (Perform mode: add <code>?perf=1</code>)</li>
+      <li>C-Bus app: <code>http://&lt;rig-ip&gt;:8080/</code> (IP, not hostname)</li>
+    </ul>
+    <p>Finally, the switch test:</p>
+<pre><button class="copy">copy</button><code>sonor-rig use fractal   <span class="c"># panel → Fractal perform UI; renderer appears fullscreen on HDMI-A-2 within ~2 s</span>
+sonor-rig use pixel     <span class="c"># back again — both daemons kept running the whole time</span></code></pre>
+  </div>
+
+  <div class="card" id="drive">
+    <h2>Driving it — command reference</h2>
+    <div class="tablewrap"><table>
+      <tr><th>Command</th><th>What it does</th></tr>
+      <tr><td><code>sonor-rig list</code></td><td>What is installed / running / healthy; ▶ = the app on the panel.</td></tr>
+      <tr><td><code>sonor-rig install &lt;app&gt;</code></td><td>Clone + run that project's own installer. Idempotent. <code>all</code> for everything.</td></tr>
+      <tr><td><code>sonor-rig use &lt;app&gt;</code></td><td>Put that app on the panel (and its display program on the second HDMI). Nothing else stops.</td></tr>
+      <tr><td><code>sonor-rig only &lt;app&gt;</code></td><td><code>use</code> it <em>and</em> stop the other apps' services — for when one thing needs all the CPU or the serial bus.</td></tr>
+      <tr><td><code>sonor-rig all</code></td><td>Start every installed app again.</td></tr>
+      <tr><td><code>sonor-rig start | stop | restart | enable | disable | logs &lt;app&gt;</code></td><td>Per-app service control; <code>logs</code> follows the journal.</td></tr>
+      <tr><td><code>sonor-rig update all</code></td><td><code>git pull</code> every project and re-run every installer — this is how new versions reach the rig.</td></tr>
+      <tr><td><code>sonor-rig ports</code></td><td>Declared ports, what is listening, and any clash.</td></tr>
+      <tr><td><code>sonor-rig doctor</code></td><td>Throttling, temperature, displays, FTDI adapters, session loop.</td></tr>
+      <tr><td><code>sonor-rig add &lt;name&gt;</code></td><td>Scaffold <code>apps.d/&lt;name&gt;.app</code> for the next project.</td></tr>
+    </table></div>
+    <p class="muted">The <code>pi</code> user can run <code>sonor-rig</code> without a password prompt (a sudoers snippet the installer writes — it is a bench, not a site).</p>
+  </div>
+
+  <div class="card" id="config">
+    <h2>Config files</h2>
+    <div class="tablewrap"><table>
+      <tr><th>Path</th><th>Purpose</th></tr>
+      <tr><td><code>/etc/sonor-rig/rig.env</code></td><td>Bench-wide: <code>KIOSK_SIZE=1024,600</code> · <code>RENDER_DISPLAY=1</code> (0 = panel, 1 = second HDMI) · <code>RENDER_ARGS=</code> (e.g. <code>--window 1280x720</code>) · <code>CHROME_EXTRA_FLAGS=</code></td></tr>
+      <tr><td><code>/etc/sonor-rig/pixel.env</code></td><td><code>ARGS=</code> extra Pixel Conductor args — <code>--simulate</code> when there are no WLED nodes.</td></tr>
+      <tr><td><code>/etc/sonor-rig/fractal.env</code></td><td><code>WEB_PORT=8081</code> · <code>ARGS=</code> extra master args, e.g. <code>--audio</code> or <code>--no-prodj</code>.</td></tr>
+      <tr><td><code>/etc/sonor-rig/cbus.env</code></td><td><code>ARGS=--simulate --port 8765</code> by default; real PCI settings above.</td></tr>
+      <tr><td><code>/etc/sonor-rig/edin.env</code></td><td><code>ARGS=--simulate --log INFO</code> by default; real: <code>--config /etc/sonor-edin-cbus-bridge/config.yaml</code>.</td></tr>
+      <tr><td><code>/etc/sonor-rig/current</code></td><td>The name of the front app. <code>sonor-rig use</code> writes it; the session loop watches it.</td></tr>
+      <tr><td><code>~/sonor/&lt;app&gt;/</code></td><td>The project checkouts, exactly as a dedicated Pi would have them (<code>pixel-conductor</code>, <code>fractal-rig</code>, <code>cbus</code>, <code>edin-cbus-bridge</code>).</td></tr>
+      <tr><td><code>/etc/systemd/system/&lt;unit&gt;.service.d/sonor-rig.conf</code></td><td>The per-app drop-ins — the <em>only</em> rig-specific change to how a project runs. The project repos are untouched.</td></tr>
+    </table></div>
+    <p>After editing any <code>*.env</code>: <code>sonor-rig restart &lt;app&gt;</code> (or <code>sonor-rig use &lt;app&gt;</code> again for <code>rig.env</code> display changes).</p>
+  </div>
+
+  <div class="card" id="apps">
+    <h2>The apps on the rig</h2>
+    <div class="tablewrap"><table>
+      <tr><th>app</th><th>project</th><th>installer used</th><th>panel shows</th><th>rig-specific</th></tr>
+      <tr><td><code>pixel</code></td><td>STUDIO - Pixel Conductor — multi-zone WLED pixel-strip engine</td><td><code>setup/install-pi.sh</code></td><td>Perform mode <code>:8760/?mode=perform</code></td><td><code>ARGS</code> env (<code>--simulate</code> with no nodes)</td></tr>
+      <tr><td><code>fractal</code></td><td>STUDIO - Fractal Rig — projector visualiser (master + GLES renderer)</td><td><code>setup/install.sh master</code></td><td>Perform UI <code>:8081/?perf=1</code> + renderer on HDMI-A-2</td><td>web port 8081; renderer runs in the desktop session, not the KMSDRM unit</td></tr>
+      <tr><td><code>cbus</code></td><td>APP - C-Bus (<code>daemon/</code>) — Clipsal Wiser replacement + bundled web app</td><td>venv from <code>requirements-232.txt</code> (repo has no script)</td><td>bundled app <code>http://&lt;ip&gt;:8080</code></td><td>rig-written unit (shipped one hard-codes <code>/home/pi</code>); simulator by default</td></tr>
+      <tr><td><code>edin</code></td><td>sonor-edin-cbus-bridge — eDIN+ ↔ C-Bus</td><td><code>deploy/install.sh</code></td><td>headless (<code>sonor-rig logs edin</code>)</td><td>simulator by default; C-Gate not installed</td></tr>
+    </table></div>
+    <p>Pixel Conductor and the Fractal master both join the multicast group <code>239.255.42.1:5005</code> — the master sends the beat/param stream, the conductor listens. On the rig that delivery is over loopback, so Pixel Conductor's beat clock follows the Fractal master automatically with no configuration.</p>
+  </div>
+
+  <div class="card" id="ports">
+    <h2>Ports</h2>
+    <div class="tablewrap"><table>
+      <tr><th>app</th><th>listens</th><th>talks out to</th></tr>
+      <tr><td><b>Pixel Conductor</b></td><td>8760/tcp web + WS · 4980/tcp Control4 · 9100/udp OSC</td><td>4048/udp DDP → WLED nodes · WLED <code>/json</code> over 80/tcp</td></tr>
+      <tr><td><b>Fractal Rig master</b></td><td><b>8081/tcp</b> web (8080 on a dedicated Pi) · 5005/udp FRX1 multicast · 9000/udp OSC · 50000–50002/udp Pro DJ Link</td><td>4048/udp DDP · 5568/udp sACN · 6454/udp Art-Net (optional LED output)</td></tr>
+      <tr><td><b>C-Bus daemon</b></td><td>8765/tcp WebSocket · <b>8080/tcp</b> bundled web app (fixed)</td><td>10001/tcp to a 5500CN2, or <code>/dev/ttyUSB0</code> to a 5500PC</td></tr>
+      <tr><td><b>eDIN+ bridge</b></td><td>nothing (simulator: 8826 / 28023 / 28025 tcp)</td><td>26/tcp eDIN+ NPU · 20023 + 20025/tcp C-Gate</td></tr>
+      <tr><td>sonor-rig</td><td>nothing — the panel is a local Chromium kiosk</td><td>—</td></tr>
+    </table></div>
+    <p><b>The one clash:</b> the Fractal master and the C-Bus daemon both default to 8080. The C-Bus port is hard-coded (its app keys off port 8080), the Fractal port is a flag, so on the rig Fractal moves to 8081 via its drop-in. Field Pis keep 8080 — nothing in either project changed.</p>
+  </div>
+
+  <div class="card" id="screens">
+    <h2>Two screens</h2>
+    <p>The kiosk lands on the <b>first</b> output; the Fractal renderer goes fullscreen on SDL display <code>RENDER_DISPLAY</code> (default <code>1</code> = the second HDMI).</p>
+    <ul>
+      <li><b>Swapped?</b> Either swap the two HDMI leads, or set <code>RENDER_DISPLAY=0</code> in <code>/etc/sonor-rig/rig.env</code> and run <code>sonor-rig use fractal</code> again.</li>
+      <li><b>Only the panel attached?</b> Set <code>RENDER_ARGS=--window 1024x600</code> in <code>rig.env</code> — the renderer opens as a window on the panel for testing.</li>
+      <li><b>Panel in the wrong mode / black / cropped?</b> Add <code>video=HDMI-A-1:1024x600@60</code> to the single line in <code>/boot/firmware/cmdline.txt</code> and reboot.</li>
+    </ul>
+  </div>
+
+  <div class="card" id="trouble">
+    <h2>Troubleshooting</h2>
+    <div class="tablewrap"><table>
+      <tr><th>Symptom</th><th>Check / fix</th></tr>
+      <tr><td><code>ssh pi@sonor-rig.local</code> can't find the host</td><td>Use the IP from the router. On Windows, mDNS may need Bonjour; on the same LAN <code>ping sonor-rig.local</code> from a Mac usually works.</td></tr>
+      <tr><td><code>install.sh</code> says "run with sudo"</td><td>It must be <code>sudo bash install.sh …</code>. It is safe to re-run.</td></tr>
+      <tr><td>Clone of a project fails (auth / 404)</td><td>Private repo. <code>gh auth login</code> on the Pi, or <code>scp</code> the folder from the Mac into <code>~/sonor/&lt;dir&gt;</code> and run <code>sonor-rig install &lt;app&gt;</code> (see steps 3 and 4).</td></tr>
+      <tr><td>Panel shows a desktop, no kiosk</td><td><code>sonor-rig doctor</code> → session loop. Re-install just the session bits: <code>cd ~/sonor/test-rig &amp;&amp; sudo bash install.sh --session-only</code>, then log out/in or reboot.</td></tr>
+      <tr><td>An app shows <span class="bad">unhealthy</span> in <code>list</code></td><td><code>sonor-rig logs &lt;app&gt;</code>. Usually a missing dependency (re-run <code>sonor-rig install &lt;app&gt;</code>) or a port clash (<code>sonor-rig ports</code>).</td></tr>
+      <tr><td>Fractal renderer never appears on the projector</td><td>Is Fractal the front app? (<code>sonor-rig use fractal</code>). Is the projector on HDMI-A-2? Try <code>RENDER_DISPLAY=0</code>, or <code>RENDER_ARGS=--window 1024x600</code> to prove the renderer runs.</td></tr>
+      <tr><td>Renderer / kiosk stutters, Pi feels slow</td><td><code>sonor-rig doctor</code>: throttle flag ≠ <code>0x0</code> means power or heat. 27 W supply + active cooler. Use <code>sonor-rig only &lt;app&gt;</code> while working on one thing.</td></tr>
+      <tr><td>C-Bus app opens but doesn't connect</td><td>Open it by IP (<code>http://&lt;rig-ip&gt;:8080/</code>), not <code>localhost</code> or the hostname.</td></tr>
+      <tr><td>Pixel Conductor shows no nodes</td><td>Normal on a bench without Gledoptos — <code>ARGS=--simulate</code> in <code>pixel.env</code>. With real nodes, they must be on the same LAN and answer on port 80.</td></tr>
+      <tr><td>Fractal UI is on 8081, not 8080</td><td>Correct on the rig (C-Bus owns 8080). Dedicated Pis use 8080.</td></tr>
+      <tr><td>Something needs a clean slate</td><td>Re-image the card and start from step 1 — the whole build is ~1 hour and nothing important lives on the rig except <code>/etc/sonor-rig/*.env</code> (copy those off first if customised).</td></tr>
+    </table></div>
+  </div>
+
+  <div class="card" id="next">
+    <h2>Adding the next project</h2>
+<pre><button class="copy">copy</button><code>cd ~/sonor/test-rig
+sonor-rig add hub          <span class="c"># scaffolds apps.d/hub.app from TEMPLATE.app</span>
+nano apps.d/hub.app        <span class="c"># REPO, INSTALL (its own installer), UNITS, URL, PORTS</span>
+bash tests/test_rig.sh     <span class="c"># lint + port-clash check — no Pi, root or network needed</span>
+sonor-rig install hub</code></pre>
+    <p>Commit the new <code>.app</code> file — that is the whole registration. The tests fail on a listening-port clash, an unexpanded <code>$APP_PATH</code> in systemd text, or a bash default leaking into a unit file.</p>
+  </div>
+
+  <div class="card" id="handover">
+    <h2>Handover checklist</h2>
+    <p>Tick these off and send the answers back with the rig. (The ticks are only stored in this browser.)</p>
+    <ul class="check">
+      <li><input type="checkbox"> Imaged: Pi OS 64-bit <b>with desktop</b>, hostname <code>sonor-rig</code>, user <code>pi</code>, SSH on. Password noted: ____________</li>
+      <li><input type="checkbox"> <code>sudo apt full-upgrade</code> completed</li>
+      <li><input type="checkbox"> <code>install.sh --apps pixel,fractal --front pixel</code> completed without errors; rebooted</li>
+      <li><input type="checkbox"> Panel boots into Pixel Conductor Perform mode; touch works</li>
+      <li><input type="checkbox"> C-Bus copied over and installed (<code>sonor-rig install cbus</code>); app opens at <code>http://&lt;ip&gt;:8080/</code></li>
+      <li><input type="checkbox"> eDIN+ bridge installed (optional)</li>
+      <li><input type="checkbox"> <code>sonor-rig list</code> — every app running and healthy</li>
+      <li><input type="checkbox"> <code>sonor-rig doctor</code> — throttle <code>0x0</code>, temperature under 70 °C, two displays seen</li>
+      <li><input type="checkbox"> <code>sonor-rig ports</code> — no clash</li>
+      <li><input type="checkbox"> <code>sonor-rig use fractal</code> — renderer appears on the projector; <code>sonor-rig use pixel</code> — back</li>
+      <li><input type="checkbox"> Rig IP address noted: ____________ (and whether it is a DHCP reservation)</li>
+      <li><input type="checkbox"> Anything changed in <code>/etc/sonor-rig/*.env</code> written down</li>
+    </ul>
+    <h3>Paste-back for the report</h3>
+    <p>Run this on the Pi and send the output:</p>
+<pre><button class="copy">copy</button><code>hostname -I; cat /etc/os-release | head -2; sonor-rig list; sonor-rig doctor; sonor-rig ports</code></pre>
+  </div>
+</main>
+
+<footer>Sonor STUDIO · Test Rig build guide · source and CLI: <a href="https://github.com/sonorltd/sonor-test-rig">sonorltd/sonor-test-rig</a> (see <code>docs/BENCH.md</code> and <code>docs/PORTS.md</code> for the same material in the repo). Sibling projects: <a href="https://github.com/sonorltd/sonor-pixel-conductor">Pixel Conductor</a> · <a href="https://sonorltd.github.io/sonor-fractal-rig/">Fractal Rig</a>.</footer>
+
+<script>
+  document.querySelectorAll('pre .copy').forEach(b => b.addEventListener('click', () => {
+    const code = b.parentElement.querySelector('code');
+    const text = Array.from(code.childNodes).map(n => n.classList && n.classList.contains('c') ? '' : n.textContent).join('').replace(/[ \t]+\n/g, '\n').trim();
+    navigator.clipboard.writeText(text).then(() => { b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy', 1200); });
+  }));
+  try {
+    document.querySelectorAll('.check input').forEach((c, i) => { c.checked = localStorage.getItem('rig.chk.' + i) === '1'; c.addEventListener('change', () => localStorage.setItem('rig.chk.' + i, c.checked ? '1' : '0')); });
+  } catch (e) {}
+</script>
+</body>
+</html>
