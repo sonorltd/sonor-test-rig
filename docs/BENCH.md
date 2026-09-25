@@ -17,11 +17,11 @@ Everything the studio projects need, on one Pi, switchable. Field Pis are still 
 ## Image
 
 Raspberry Pi Imager → **Raspberry Pi OS (64-bit) with desktop** (Bookworm or later, *not* Lite — see
-`install.sh` header for why). In the Imager settings: hostname `sonor-rig`, user `pi`, SSH on, Wi-Fi if
+`install.sh` header for why). In the Imager settings: hostname `sonorpi`, user `pi`, SSH on, Wi-Fi if
 no Ethernet, UK locale/timezone.
 
 ```bash
-ssh pi@sonor-rig.local
+ssh pi@sonorpi.local
 sudo apt update && sudo apt full-upgrade -y && sudo apt install -y git
 mkdir -p ~/sonor && git clone https://github.com/sonorltd/sonor-test-rig.git ~/sonor/test-rig
 cd ~/sonor/test-rig
@@ -48,8 +48,8 @@ sonor-rig doctor
 deploy key) — or just copy it from the Mac and the installer uses what it finds:
 
 ```bash
-scp -r "$HOME/Code/Sonor/APP - C-Bus" pi@sonor-rig.local:~/sonor/cbus
-ssh pi@sonor-rig.local sonor-rig install cbus
+scp -r "$HOME/Code/Sonor/APP - C-Bus" pi@sonorpi.local:~/sonor/cbus
+ssh pi@sonorpi.local sonor-rig install cbus
 ```
 
 Simulator by default. Real PCI: edit `/etc/sonor-rig/cbus.env` (`ARGS=--serial /dev/ttyUSB0 --port 8765 --auth`)
