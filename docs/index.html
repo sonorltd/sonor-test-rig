@@ -168,7 +168,7 @@ sudo reboot</code></pre>
       <li>applies the only rig-specific tweaks, as systemd drop-ins: the Fractal web UI moves to port <b>8081</b> (the C-Bus daemon needs 8080) and the Fractal renderer runs inside the desktop session instead of as the shipped KMSDRM service;</li>
       <li>sets up the desktop autostart: a Chromium kiosk on the front app's URL plus that app's display program.</li>
     </ul>
-    <p>Expect 15–30 minutes: the Fractal installer compiles the renderer and both projects build Python environments. After the reboot the <b>panel boots straight into Pixel Conductor's Perform mode</b> (big touch buttons). Tap <b>Exit</b> on it for the full micro-control UI.</p>
+    <p>Expect 15–30 minutes: the Fractal installer compiles the renderer and both projects build Python environments. After the reboot the <b>panel boots into the rig launcher</b>: one big tile per app with a live status dot. Tap a tile to put that app on the panel — it opens full-screen, and the round <b>⌂</b> button bottom-right brings the tiles back (apps keep running underneath). Headless apps show START / STOP on their tile. Inside Pixel Conductor or Fractal Rig, tap <b>Exit</b> on their Perform screens for the full micro-control UI.</p>
     <div class="note">Do <b>not</b> use the projects' <code>install-kiosk.sh</code> scripts on the rig — the rig's own session handles the kiosk. Those scripts are for dedicated field Pis.</div>
     <h3>If the Fractal Rig clone fails</h3>
     <p>The <code>sonor-fractal-rig</code> repository may be private. If <code>install.sh</code> reports it cannot clone it, either sign the Pi into GitHub first (<code>sudo apt install gh &amp;&amp; gh auth login</code>, then re-run the install command), or copy the project over from the Mac and re-run — the installer uses whatever it finds in place:</p>
@@ -199,7 +199,7 @@ sonor-rig logs edin</code></pre>
 <pre><button class="copy">copy</button><code>sonor-rig list      <span class="c"># installed / running / healthy — ▶ marks what is on the panel</span>
 sonor-rig doctor    <span class="c"># throttling, temperature, displays, FTDI adapters, session loop</span>
 sonor-rig ports     <span class="c"># declared ports · what is actually listening · clashes</span></code></pre>
-    <p>What good looks like: <code>list</code> shows every installed app <span class="ok">running</span> and <span class="ok">healthy</span>; <code>doctor</code> shows throttle flag <code>0x0</code>, temperature comfortably under 70 °C, two displays and the session loop alive; <code>ports</code> shows no clash. Then from any laptop or phone on the same network:</p>
+    <p>What good looks like: <code>list</code> shows every installed app <span class="ok">running</span> and <span class="ok">healthy</span>; <code>doctor</code> shows throttle flag <code>0x0</code>, temperature comfortably under 70 °C, two displays, the session loop alive and the launcher serving; <code>ports</code> shows no clash. Then from any laptop or phone on the same network:</p>
     <ul>
       <li>Pixel Conductor full UI: <code>http://sonorpi.local:8760/</code></li>
       <li>Fractal Rig full UI: <code>http://sonorpi.local:8081/</code> (Perform mode: add <code>?perf=1</code>)</li>
@@ -237,6 +237,7 @@ sonor-rig use pixel     <span class="c"># back again — both daemons kept runni
       <tr><td><code>/etc/sonor-rig/fractal.env</code></td><td><code>WEB_PORT=8081</code> · <code>ARGS=</code> extra master args, e.g. <code>--audio</code> or <code>--no-prodj</code>.</td></tr>
       <tr><td><code>/etc/sonor-rig/cbus.env</code></td><td><code>ARGS=--simulate --port 8765</code> by default; real PCI settings above.</td></tr>
       <tr><td><code>/etc/sonor-rig/edin.env</code></td><td><code>ARGS=--simulate --log INFO</code> by default; real: <code>--config /etc/sonor-edin-cbus-bridge/config.yaml</code>.</td></tr>
+      <tr><td><code>LAUNCHER=1</code> / <code>LAUNCHER_PORT=8700</code> (in <code>rig.env</code>)</td><td>Panel home screen on or off. <code>0</code> = kiosk straight on the front app (the old behaviour). The launcher listens on 127.0.0.1 only.</td></tr>
       <tr><td><code>/etc/sonor-rig/current</code></td><td>The name of the front app. <code>sonor-rig use</code> writes it; the session loop watches it.</td></tr>
       <tr><td><code>~/sonor/&lt;app&gt;/</code></td><td>The project checkouts, exactly as a dedicated Pi would have them (<code>pixel-conductor</code>, <code>fractal-rig</code>, <code>cbus</code>, <code>edin-cbus-bridge</code>).</td></tr>
       <tr><td><code>/etc/systemd/system/&lt;unit&gt;.service.d/sonor-rig.conf</code></td><td>The per-app drop-ins — the <em>only</em> rig-specific change to how a project runs. The project repos are untouched.</td></tr>
@@ -264,7 +265,7 @@ sonor-rig use pixel     <span class="c"># back again — both daemons kept runni
       <tr><td><b>Fractal Rig master</b></td><td><b>8081/tcp</b> web (8080 on a dedicated Pi) · 5005/udp FRX1 multicast · 9000/udp OSC · 50000–50002/udp Pro DJ Link</td><td>4048/udp DDP · 5568/udp sACN · 6454/udp Art-Net (optional LED output)</td></tr>
       <tr><td><b>C-Bus daemon</b></td><td>8765/tcp WebSocket · <b>8080/tcp</b> bundled web app (fixed)</td><td>10001/tcp to a 5500CN2, or <code>/dev/ttyUSB0</code> to a 5500PC</td></tr>
       <tr><td><b>eDIN+ bridge</b></td><td>nothing (simulator: 8826 / 28023 / 28025 tcp)</td><td>26/tcp eDIN+ NPU · 20023 + 20025/tcp C-Gate</td></tr>
-      <tr><td>sonor-rig</td><td>nothing — the panel is a local Chromium kiosk</td><td>—</td></tr>
+      <tr><td>sonor-rig</td><td>8700/tcp launcher, <b>127.0.0.1 only</b></td><td>—</td></tr>
     </table></div>
     <p><b>The one clash:</b> the Fractal master and the C-Bus daemon both default to 8080. The C-Bus port is hard-coded (its app keys off port 8080), the Fractal port is a flag, so on the rig Fractal moves to 8081 via its drop-in. Field Pis keep 8080 — nothing in either project changed.</p>
   </div>
@@ -288,6 +289,7 @@ sonor-rig use pixel     <span class="c"># back again — both daemons kept runni
       <tr><td>A service shows <code>status=203/EXEC</code> in its unit status</td><td>The path in the systemd drop-in doesn't exist — fixed in sonor-rig 0.1.1 (<code>cd ~/sonor/test-rig &amp;&amp; git pull &amp;&amp; sonor-rig install &lt;app&gt;</code> rewrites the drop-in).</td></tr>
       <tr><td><code>install.sh</code> says "run with sudo"</td><td>It must be <code>sudo bash install.sh …</code>. It is safe to re-run.</td></tr>
       <tr><td>Clone of a project fails (auth / 404)</td><td>Private repo. <code>gh auth login</code> on the Pi, or <code>scp</code> the folder from the Mac into <code>~/sonor/&lt;dir&gt;</code> and run <code>sonor-rig install &lt;app&gt;</code> (see steps 3 and 4).</td></tr>
+      <tr><td>Panel shows an app instead of the launcher tiles, or the ⌂ button is missing</td><td><code>LAUNCHER=0</code> in <code>/etc/sonor-rig/rig.env</code>, or an old session loop: <code>cd ~/sonor/test-rig &amp;&amp; git pull &amp;&amp; sudo bash install.sh --session-only</code> then reboot. <code>sonor-rig doctor</code> shows whether the launcher is serving.</td></tr>
       <tr><td>Panel shows a desktop, no kiosk</td><td><code>sonor-rig doctor</code> → session loop. Re-install just the session bits: <code>cd ~/sonor/test-rig &amp;&amp; sudo bash install.sh --session-only</code>, then log out/in or reboot.</td></tr>
       <tr><td>An app shows <span class="bad">unhealthy</span> in <code>list</code></td><td><code>sonor-rig logs &lt;app&gt;</code>. Usually a missing dependency (re-run <code>sonor-rig install &lt;app&gt;</code>) or a port clash (<code>sonor-rig ports</code>).</td></tr>
       <tr><td>Fractal renderer never appears on the projector</td><td>Is Fractal the front app? (<code>sonor-rig use fractal</code>). Is the projector on HDMI-A-2? Try <code>RENDER_DISPLAY=0</code>, or <code>RENDER_ARGS=--window 1024x600</code> to prove the renderer runs.</td></tr>
@@ -316,7 +318,7 @@ sonor-rig install hub</code></pre>
       <li><input type="checkbox"> Imaged: Pi OS 64-bit <b>with desktop</b>, hostname <code>sonorpi</code>, user <code>sonorpi</code>, SSH on. Password noted: ____________</li>
       <li><input type="checkbox"> <code>sudo apt full-upgrade</code> completed</li>
       <li><input type="checkbox"> <code>install.sh --apps pixel,fractal --front pixel</code> completed without errors; rebooted</li>
-      <li><input type="checkbox"> Panel boots into Pixel Conductor Perform mode; touch works</li>
+      <li><input type="checkbox"> Panel boots into the launcher tiles; tapping Pixel Conductor opens it; ⌂ returns to the tiles</li>
       <li><input type="checkbox"> C-Bus copied over and installed (<code>sonor-rig install cbus</code>); app opens at <code>http://&lt;ip&gt;:8080/</code></li>
       <li><input type="checkbox"> eDIN+ bridge installed (optional)</li>
       <li><input type="checkbox"> <code>sonor-rig list</code> — every app running and healthy</li>

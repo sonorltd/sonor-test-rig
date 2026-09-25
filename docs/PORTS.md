@@ -9,7 +9,7 @@ One Pi, several daemons — this table is the rule that keeps them from treading
 | **Fractal Rig master** `fractal` | **8081/tcp** web (8080 on a dedicated Pi) · 5005/udp FRX1 multicast `239.255.42.1` · 9000/udp OSC · 50000–50002/udp Pro DJ Link | 4048/udp DDP · 5568/udp sACN · 6454/udp Art-Net (optional LED output) | renderer runs in the desktop session, no ports |
 | **C-Bus daemon** `cbus` | 8765/tcp WebSocket (app ↔ daemon) · **8080/tcp** bundled web app (fixed in `start_webapp_server`) | 10001/tcp to a 5500CN2 · or `/dev/ttyUSB0` to a 5500PC | the bundled app only auto-connects when served from `http://<ip>:8080` |
 | **eDIN+ bridge** `edin` | nothing (simulator: 8826 / 28023 / 28025 tcp) | 26/tcp eDIN+ NPU · 20023 + 20025/tcp C-Gate | headless |
-| sonor-rig itself | nothing | — | the panel is a local Chromium kiosk |
+| sonor-rig itself | 8700/tcp launcher, **127.0.0.1 only** | — | the panel is a local Chromium kiosk showing the launcher |
 
 ## The one clash, and the fix
 

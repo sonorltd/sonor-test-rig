@@ -26,4 +26,6 @@ HEALTH="http://localhost:${WEB_PORT:-8081}/"
 SESSION="renderer/fractal --display ${RENDER_DISPLAY:-1} ${RENDER_ARGS:-}"
 
 PORTS="${WEB_PORT:-8081}/tcp web (8080 on a dedicated Pi) · 5005/udp FRX1 multicast 239.255.42.1 · 9000/udp OSC · 50000-50002/udp Pro DJ Link · out→4048/udp 5568/udp 6454/udp LED strip"
+ICON="fractal"
+COLOR="#8058a1"
 NOTES="Renderer shows on HDMI-A-2 (RENDER_DISPLAY in /etc/sonor-rig/rig.env). Pixel Conductor's beat clock follows this master's multicast automatically."

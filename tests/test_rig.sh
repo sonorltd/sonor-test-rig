@@ -47,6 +47,13 @@ for f in "$ROOT"/apps.d/*.app; do
   ) && ok "$n.app" || bad "$n.app"
 done
 
+echo "== launcher"
+python3 -m py_compile "$ROOT/session/launcher.py" && ok "launcher.py compiles" || bad "launcher.py compiles"
+n_apps="$(ls "$ROOT"/apps.d/*.app | grep -vc TEMPLATE)"
+n_dump="$(RIG_ROOT=/nonexistent RIG_USER=pi python3 "$ROOT/session/launcher.py" --dump 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["apps"]))' 2>/dev/null || echo 0)"
+[ "$n_dump" = "$n_apps" ] && ok "launcher --dump lists all $n_apps apps" || bad "launcher --dump lists $n_dump of $n_apps apps"
+grep -q '"icon"' <<<"$(RIG_ROOT=/nonexistent RIG_USER=pi python3 "$ROOT/session/launcher.py" --dump 2>/dev/null)" && ok "launcher exposes icon/colour" || bad "launcher exposes icon/colour"
+
 echo "== port clashes"
 clashes="$(for f in "$ROOT"/apps.d/*.app; do n="$(basename "$f" .app)"; [ "$n" = TEMPLATE ] && continue
   ( NAME= PORTS=; APP_PATH="$RIG_ROOT/$n"; . "$f" >/dev/null 2>&1; printf '%s\n' "$PORTS" | sed 's/out→[^·]*//g' | grep -oE '[0-9]{2,5}/(tcp|udp)' | sed "s/^/$n /" ); done \

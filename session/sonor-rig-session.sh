@@ -2,7 +2,10 @@
 # sonor-rig session loop — the desktop half of the test rig. Started at login (labwc / XDG autostart),
 # runs as the desktop user, never as root.
 #
-#  • keeps a Chromium kiosk on the touch panel pointed at the FRONT app's URL
+#  • keeps a Chromium kiosk on the touch panel. With LAUNCHER=1 (default) the kiosk shows the rig's
+#    own launcher (session/launcher.py on 127.0.0.1:8700): a tile per app, tap = front app, the app
+#    opens inside it with a ⌂ tab back to the grid. With LAUNCHER=0 the kiosk points straight at the
+#    front app's URL (the v0.1 behaviour).
 #  • runs the front app's SESSION program (e.g. the Fractal renderer on the second HDMI output)
 #  • watches /etc/sonor-rig/current — `sonor-rig use <app>` just rewrites that file and this loop
 #    swaps everything over within ~2 s. Crashed children are restarted; nothing ever leaves a blank panel.
@@ -28,13 +31,19 @@ FLAGS="--kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubbl
 xset s off 2>/dev/null; xset -dpms 2>/dev/null; xset s noblank 2>/dev/null
 command -v unclutter >/dev/null && { pgrep -x unclutter >/dev/null || unclutter -idle 3 -root & }
 
-CHROME_PID=""; SESSION_PID=""
-stop_children() {
-  [ -n "$SESSION_PID" ] && kill "$SESSION_PID" 2>/dev/null; [ -n "$CHROME_PID" ] && kill "$CHROME_PID" 2>/dev/null
-  sleep 0.5; [ -n "$SESSION_PID" ] && kill -9 "$SESSION_PID" 2>/dev/null; [ -n "$CHROME_PID" ] && kill -9 "$CHROME_PID" 2>/dev/null
-  pkill -f -- "--app=$URL" 2>/dev/null; CHROME_PID=""; SESSION_PID=""
+LAUNCHER="${LAUNCHER:-1}"; LAUNCHER_PORT="${LAUNCHER_PORT:-8700}"; LAUNCHER_URL="http://127.0.0.1:$LAUNCHER_PORT/"
+CHROME_PID=""; SESSION_PID=""; LAUNCHER_PID=""
+stop_session() { [ -n "$SESSION_PID" ] && kill "$SESSION_PID" 2>/dev/null; sleep 0.5; [ -n "$SESSION_PID" ] && kill -9 "$SESSION_PID" 2>/dev/null; SESSION_PID=""; }
+stop_chrome()  { [ -n "$CHROME_PID" ] && kill "$CHROME_PID" 2>/dev/null; sleep 0.5; [ -n "$CHROME_PID" ] && kill -9 "$CHROME_PID" 2>/dev/null; pkill -f -- "--app=$URL" 2>/dev/null; CHROME_PID=""; }
+stop_children() { stop_session; stop_chrome; }
+trap 'stop_children; [ -n "$LAUNCHER_PID" ] && kill "$LAUNCHER_PID" 2>/dev/null; exit 0' INT TERM
+start_launcher() {   # the panel home screen (bench only). Env tells it who/where, same as sonor-rig.
+  [ "$LAUNCHER" = 1 ] || return
+  RIG_USER="$RIG_USER" RIG_ROOT="$RIG_ROOT" LAUNCHER_PORT="$LAUNCHER_PORT" SONOR_RIG_BIN="$RIG_HOME/sonor-rig" \
+    python3 "$RIG_HOME/session/launcher.py" >>"$LOG" 2>&1 & LAUNCHER_PID=$!
+  log "launcher → $LAUNCHER_URL (pid $LAUNCHER_PID)"
+  for _ in 1 2 3 4 5 6 7 8 9 10; do curl -fsS -m 1 "$LAUNCHER_URL/api/apps" >/dev/null 2>&1 && break; sleep 0.5; done
 }
-trap 'stop_children; exit 0' INT TERM
 
 load_front() {   # sets NAME URL SESSION APP_PATH from the current front app ("" if none)
   NAME="$(cat "$ETC/current" 2>/dev/null || true)"; URL=""; SESSION=""; APP_PATH=""
@@ -51,9 +60,15 @@ start_session() { [ -n "$SESSION" ] || return; log "session → $SESSION (in $AP
 
 stamp_of() { stat -c %Y "$ETC/current" 2>/dev/null || echo 0; }
 
+start_launcher
 while true; do
   load_front; STAMP="$(stamp_of)"
-  if [ -z "$NAME" ]; then
+  if [ "$LAUNCHER" = 1 ]; then
+    # kiosk stays on the launcher across front-app changes (it follows /etc/sonor-rig/current itself);
+    # only the SESSION program (renderer) is swapped here
+    URL="$LAUNCHER_URL"; [ -n "$CHROME_PID" ] && kill -0 "$CHROME_PID" 2>/dev/null || start_chrome
+    [ -z "$NAME" ] || start_session
+  elif [ -z "$NAME" ]; then
     log "no front app yet (sonor-rig use <app>) — showing the rig page"
     URL="file://$RIG_HOME/session/waiting.html"; start_chrome
   else
@@ -61,8 +76,10 @@ while true; do
   fi
   while [ "$(stamp_of)" = "$STAMP" ]; do
     sleep 2
+    if [ -n "$LAUNCHER_PID" ] && ! kill -0 "$LAUNCHER_PID" 2>/dev/null; then log "launcher died — restarting"; start_launcher; fi
     if [ -n "$CHROME_PID" ] && ! kill -0 "$CHROME_PID" 2>/dev/null; then log "chromium died — restarting"; sleep 2; start_chrome; fi
     if [ -n "$SESSION_PID" ] && ! kill -0 "$SESSION_PID" 2>/dev/null; then log "session program died — restarting in 3 s"; sleep 3; start_session; fi
   done
-  log "front app changed → $(cat "$ETC/current" 2>/dev/null)"; stop_children
+  log "front app changed → $(cat "$ETC/current" 2>/dev/null)"
+  if [ "$LAUNCHER" = 1 ]; then stop_session; else stop_children; fi
 done

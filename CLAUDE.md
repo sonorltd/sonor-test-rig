@@ -1,6 +1,6 @@
-# STUDIO - Test Rig (v0.1.1)
+# STUDIO - Test Rig (v0.2.0)
 
-> Current version: 0.1.1 · Repo: `sonor-test-rig` · Pages: https://sonorltd.github.io/sonor-test-rig/ (build guide only)
+> Current version: 0.2.0 · Repo: `sonor-test-rig` · Pages: https://sonorltd.github.io/sonor-test-rig/ (build guide only)
 > Type: side-project / infra (STUDIO class). Not a product; never installed on a field Pi.
 
 `sonor-rig` — one bench Pi 5 hosting every Sonor daemon project (Pixel Conductor, Fractal Rig, C-Bus daemon,
@@ -39,7 +39,7 @@ eDIN+ bridge, …) side by side, with the touch panel / HDMI switched between th
   `${x:-default}` there (the tests catch it). `$APP_PATH` / `$RIG_USER` *are* expanded at source time.
 - The desktop session owns the GPU: nothing on the rig may run SDL KMSDRM as a system unit. Display programs
   go in `SESSION=` and run inside the login session on `RENDER_DISPLAY`.
-- `bash tests/test_rig.sh` must stay green (17 checks, no Pi needed). Untested on real hardware as of v0.1.0 —
+- `bash tests/test_rig.sh` must stay green (19 checks, no Pi needed). First real-hardware run 2026-09-25 (bench `sonorpi`) —
   the first bench build gets a patch bump with whatever the two-screen layout needs.
 - Version lives in `sonor-rig` `RIG_VERSION` + this banner. Commit format `v{X.Y.Z}: …`.
 
@@ -58,6 +58,14 @@ eDIN+ bridge, …) side by side, with the touch panel / HDMI switched between th
   with a regression test. GitHub Pages build guide `docs/index.html` (Pages from `/docs`); docs use
   `sonorpi@sonorpi.local`; ssh line on its own (pasted lines are eaten by the password prompt); Wi-Fi caveat —
   `wpasupplicant` upgrades drop the session, so upgrade over Ethernet or inside `screen`.
+- 2026-09-25 v0.2.0 — **Launcher** (Bryn: "a boot screen which has icons for all the different apps to choose
+  which to load — only for the studio rig test pi"): `session/launcher.py` (stdlib HTTP on 127.0.0.1:8700,
+  run by the session loop as the desktop user) + `launcher.html` (1024×600 touch grid, one tile per
+  `apps.d` entry with installed/state/health/front, SVG icons via new `ICON`/`COLOR` keys, START/STOP for
+  headless apps). Tap → `sudo -n sonor-rig use <app>` (the existing sudoers snippet) → app shown in an
+  iframe with a ⌂ tab back to the grid; the panel also follows `sonor-rig use` from SSH. Session loop:
+  `LAUNCHER=1` default (kiosk stays on the launcher, only the SESSION program swaps), `LAUNCHER=0` = v0.1
+  kiosk-on-app. `doctor` checks the launcher; 19 tests (launcher compile + `--dump`).
 
 ## Pending / next (see IDEAS.md)
 - First real bench build on the Pi 5: confirm Chromium lands on HDMI-A-1 and the renderer on HDMI-A-2 under labwc.

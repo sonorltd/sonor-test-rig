@@ -23,7 +23,7 @@
 # Field Pis never see this script: they run each project's installer directly.
 set -euo pipefail
 
-RIG_VERSION="0.1.1"
+RIG_VERSION="0.2.0"
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 RIG_HOME="$(cd "$(dirname "$SELF")" && pwd)"
 APPS_D="$RIG_HOME/apps.d"
@@ -212,6 +212,7 @@ cmd_doctor() {
   say "displays:"; { wlr-randr 2>/dev/null || xrandr 2>/dev/null || echo "  (no compositor in this shell — run from the desktop session)"; } | grep -E '^[A-Z]|current|\*|compositor' | sed 's/^/  /' || true
   say "serial adapters (C-Bus 5500PC / FTDI):"; if [ -d /dev/serial/by-id ]; then ls -l /dev/serial/by-id/ | sed 's/^/  /'; else say "  none"; fi
   say "session loop:"; if pgrep -af "sonor-rig-session" >/dev/null; then ok "running (front: $(front_app))"; else warn "not running — log in on the desktop, or: sudo bash $RIG_HOME/install.sh --session-only"; fi
+  say "launcher (panel home screen):"; if curl -fsS -m 1 "http://127.0.0.1:${LAUNCHER_PORT:-8700}/api/apps" >/dev/null 2>&1; then ok "serving on 127.0.0.1:${LAUNCHER_PORT:-8700}"; else warn "not reachable — starts with the session loop when LAUNCHER=1 in $ETC/rig.env (tail ~/.cache/sonor-rig-session.log)"; fi
   say "apps:"; cmd_list
 }
 

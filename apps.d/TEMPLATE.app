@@ -35,6 +35,8 @@ HEALTH="http://localhost:8000/"       # 2xx/3xx = healthy ("" = no check)
 SESSION=""
 
 PORTS="8000/tcp web"                  # "port/proto what · port/proto what · out→port/proto what"
+ICON=""                               # launcher tile icon: pixel | fractal | cbus | edin | default ("" = default)
+COLOR=""                              # launcher tile colour, e.g. "#4bb9d3" ("" = auto)
 NOTES=""                              # printed after install
 
 # Optional hook, runs as root after the installer, before units are (re)started.

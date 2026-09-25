@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sonor-rig</title>
+<style>
+  :root { --bg:#0b0c10; --panel:#13151c; --panel2:#191c25; --line:#262a37; --text:#e8e9ee; --muted:#8b90a3;
+          --accent:#8058a1; --accent2:#4bb9d3; --ok:#78ba57; --warn:#f5d05c; --bad:#ec6061;
+          --font:'DM Sans',system-ui,-apple-system,'Segoe UI',sans-serif; --mono:'DM Mono',ui-monospace,Menlo,monospace; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html, body { height:100%; margin:0; background:var(--bg); color:var(--text); font-family:var(--font); overflow:hidden; }
+  .strip { position:fixed; top:0; left:0; right:0; height:4px; display:flex; gap:2px; z-index:3; }
+  .strip i { flex:1; display:block; }
+  #grid { height:100%; display:flex; flex-direction:column; padding:18px 22px 14px; }
+  header { display:flex; align-items:baseline; gap:14px; margin-bottom:14px; }
+  header .logo { font-weight:700; letter-spacing:.14em; font-size:14px; } header .logo span { color:var(--accent2); }
+  header .meta { color:var(--muted); font-family:var(--mono); font-size:13px; }
+  header .spacer { flex:1; } header .clock { font-family:var(--mono); font-size:22px; }
+  .tiles { flex:1; display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); grid-auto-rows:1fr; gap:14px; align-content:stretch; }
+  .tile { position:relative; border:1px solid var(--line); border-radius:18px; background:var(--panel); padding:18px; display:flex; flex-direction:column; gap:10px; align-items:center; justify-content:center; text-align:center; color:var(--text); font:inherit; cursor:pointer; transition:transform .08s, border-color .12s; overflow:hidden; }
+  .tile:active { transform:scale(.97); }
+  .tile.front { border-color:var(--c); box-shadow:0 0 0 1px var(--c) inset, 0 0 28px -8px var(--c); }
+  .tile.off { opacity:.45; }
+  .tile .ico { width:112px; height:112px; border-radius:28px; background:color-mix(in srgb, var(--c) 18%, transparent); display:grid; place-items:center; color:var(--c); }
+  .tile .ico svg { width:66px; height:66px; }
+  .tile .lab { font-size:24px; font-weight:700; line-height:1.15; margin-top:6px; }
+  .tile .sub { display:flex; align-items:center; justify-content:center; gap:7px; color:var(--muted); font-family:var(--mono); font-size:12px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--muted); flex:none; }
+  .dot.ok { background:var(--ok); box-shadow:0 0 8px var(--ok); } .dot.warn { background:var(--warn); } .dot.bad { background:var(--bad); }
+  .badge { position:absolute; top:14px; right:14px; font-family:var(--mono); font-size:10px; letter-spacing:.12em; padding:4px 8px; border-radius:999px; background:var(--c); color:#fff; }
+  .row { display:flex; gap:8px; width:100%; }
+  .mini { flex:1; border:1px solid var(--line); background:var(--panel2); color:var(--text); border-radius:10px; padding:10px 0; font:600 13px var(--font); cursor:pointer; }
+  .mini:active { border-color:var(--accent2); }
+  footer { margin-top:12px; color:var(--muted); font-size:12px; font-family:var(--mono); display:flex; gap:16px; }
+  footer .spacer { flex:1; }
+  #app { position:fixed; inset:0; display:none; background:#000; }
+  #app.on { display:block; }
+  #app iframe { width:100%; height:100%; border:0; background:#000; }
+  #home { position:fixed; right:10px; bottom:10px; width:54px; height:54px; border-radius:50%; border:1px solid rgba(255,255,255,.25); background:rgba(19,21,28,.72); color:#fff; font-size:26px; line-height:1; display:none; place-items:center; cursor:pointer; backdrop-filter:blur(6px); z-index:4; opacity:.55; }
+  #home.on { display:grid; } #home:active { opacity:1; transform:scale(.94); }
+  #toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 16px; font-family:var(--mono); font-size:13px; display:none; z-index:5; max-width:90vw; }
+  #toast.on { display:block; }
+</style>
+</head>
+<body>
+<div class="strip"><i style="background:#8058a1"></i><i style="background:#4bb9d3"></i><i style="background:#78ba57"></i><i style="background:#f5d05c"></i><i style="background:#ec6061"></i><i style="background:#e67eb1"></i><i style="background:#5b7fd6"></i><i style="background:#e8924a"></i><i style="background:#3ea89b"></i><i style="background:#b3b8c8"></i></div>
+
+<div id="grid">
+  <header>
+    <div class="logo">SONOR <span>STUDIO</span> · TEST RIG</div>
+    <div class="meta" id="meta">—</div>
+    <div class="spacer"></div>
+    <div class="clock" id="clock">--:--</div>
+  </header>
+  <div class="tiles" id="tiles"></div>
+  <footer><span>tap an app to put it on this panel · ⌂ brings you back here · apps keep running</span><span class="spacer"></span><span id="foot"></span></footer>
+</div>
+
+<div id="app"><iframe id="frame" title="app" allow="autoplay; fullscreen"></iframe></div>
+<button id="home" title="back to apps">⌂</button>
+<div id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const PALETTE = ['#e67eb1', '#4bb9d3', '#f5d05c', '#78ba57', '#8058a1', '#e8924a', '#5b7fd6', '#3ea89b'];
+  const ICONS = {
+    pixel:   '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="5" r="2.4"/><circle cx="12" cy="5" r="2.4"/><circle cx="19" cy="5" r="2.4"/><circle cx="5" cy="12" r="2.4"/><circle cx="12" cy="12" r="2.4"/><circle cx="19" cy="12" r="2.4"/><circle cx="5" cy="19" r="2.4"/><circle cx="12" cy="19" r="2.4"/><circle cx="19" cy="19" r="2.4"/></svg>',
+    fractal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 21 20H3z"/><path d="M12 3v17"/><path d="M7.5 11.5h9"/><path d="M12 11.5 7.5 20M12 11.5l4.5 8.5"/></svg>',
+    cbus:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="6"/><circle cx="15" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg>',
+    edin:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
+    default: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 21 8v8l-9 5-9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>',
+  };
+  let shownFront = null, view = 'grid', busy = false, sig = '', first = true;
+
+  function toast(t, ms = 2500) { $('toast').textContent = t; $('toast').classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => $('toast').classList.remove('on'), ms); }
+  function openApp(a) { if (!a || !a.url) return; view = 'app'; if ($('frame').src !== a.url) $('frame').src = a.url; $('app').classList.add('on'); $('home').classList.add('on'); }
+  function goHome() { view = 'grid'; $('app').classList.remove('on'); $('home').classList.remove('on'); }
+  $('home').addEventListener('click', goHome);
+
+  async function api(path) {
+    const r = await fetch(path, {method: 'POST'}); const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.ok === false) throw new Error((j.out || r.statusText || 'failed').split('\n').slice(-2).join(' '));
+    return j;
+  }
+  async function use(a) {
+    if (busy) return; busy = true; toast('switching to ' + a.label + '…', 6000);
+    try { await api('/api/use/' + a.name); shownFront = a.name; openApp(a); toast(a.label + ' on the panel', 1500); }
+    catch (e) { toast('could not switch: ' + e.message, 5000); }
+    busy = false; refresh();
+  }
+  async function units(a, action) {
+    if (busy) return; busy = true; toast(action + ' ' + a.label + '…', 6000);
+    try { await api('/api/units/' + a.name + '/' + action); toast(a.label + ': ' + action + ' ok', 1500); }
+    catch (e) { toast(e.message, 5000); }
+    busy = false; refresh();
+  }
+
+  function render(d) {
+    $('meta').textContent = d.host + ' · ' + d.ip;
+    $('clock').textContent = d.time;
+    $('foot').textContent = d.front ? 'front: ' + d.front : 'no front app';
+    const key = JSON.stringify(d.apps.map(a => [a.name, a.installed, a.state, a.healthy, a.front]));
+    if (key === sig) return; sig = key;
+    const el = $('tiles'); el.innerHTML = '';
+    const order = a => (!a.installed ? 2 : a.headless ? 1 : 0);
+    d.apps.slice().sort((x, y) => order(x) - order(y) || x.label.localeCompare(y.label)).forEach((a, i) => {
+      const c = a.color || PALETTE[i % PALETTE.length];
+      const t = document.createElement(a.headless || !a.installed ? 'div' : 'button');
+      t.className = 'tile' + (a.front ? ' front' : '') + (a.installed ? '' : ' off');
+      t.style.setProperty('--c', c);
+      const running = a.state === 'active';
+      const dot = !a.installed ? '' : a.healthy === true ? 'ok' : running ? 'warn' : 'bad';
+      const sub = !a.installed ? 'not installed · sonor-rig install ' + a.name
+                : a.headless ? (running ? 'running · headless' : a.state + ' · headless')
+                : a.healthy === true ? 'running · healthy' : running ? 'starting…' : a.state;
+      t.innerHTML = `${a.front ? '<span class="badge">ON PANEL</span>' : ''}
+        <div class="ico">${ICONS[a.icon] || ICONS.default}</div>
+        <div class="lab">${a.label}</div>
+        <div class="sub"><i class="dot ${dot}"></i>${sub}</div>` +
+        (a.headless && a.installed ? `<div class="row"><button class="mini" data-act="${running ? 'stop' : 'start'}">${running ? 'STOP' : 'START'}</button><button class="mini" data-act="restart">RESTART</button></div>` : '');
+      if (!a.headless && a.installed) t.addEventListener('click', () => use(a));
+      t.querySelectorAll('.mini').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); units(a, b.dataset.act); }));
+      el.appendChild(t);
+    });
+  }
+
+  async function refresh() {
+    try {
+      const d = await (await fetch('/api/apps')).json();
+      render(d);
+      // boot: stay on the grid so the panel is a chooser. Later, `sonor-rig use X` from SSH changes the
+      // front app: follow it onto the panel, like the plain kiosk did.
+      if (first) { first = false; shownFront = d.front || null; }
+      else if (d.front && d.front !== shownFront) { shownFront = d.front; const a = d.apps.find(x => x.name === d.front); if (a && a.url && view === 'grid' && !busy) openApp(a); }
+    } catch (e) { $('foot').textContent = 'launcher api unreachable'; }
+  }
+  refresh(); setInterval(refresh, 3000);
+  setInterval(() => { const n = new Date(); $('clock').textContent = String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0'); }, 10000);
+})();
+</script>
+</body>
+</html>

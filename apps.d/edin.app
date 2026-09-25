@@ -19,4 +19,6 @@ ARGS=--simulate --log INFO"
 URL=""                                        # headless — nothing to show on the panel
 HEALTH=""
 PORTS="none listening · out→26/tcp eDIN+ NPU · out→20023/tcp 20025/tcp C-Gate · sim: 8826/tcp 28023/tcp 28025/tcp"
+ICON="edin"
+COLOR="#f5d05c"
 NOTES="Watch it with: sonor-rig logs edin. C-Gate (Java) is not installed by the rig — see the bridge README."

@@ -29,7 +29,10 @@ sudo bash install.sh --apps pixel,fractal --front pixel      # cbus needs the pr
 sudo reboot
 ```
 
-After the reboot the panel boots into Pixel Conductor's Perform mode. Then:
+After the reboot the panel boots into the **launcher**: a tile per app with live status. Tap a tile to
+put that app on the panel (it opens full-screen; the ⌂ button bottom-right returns to the tiles, apps
+keep running). Headless apps (eDIN+) show START / STOP on their tile. Everything below still works from
+SSH and the panel follows it:
 
 ```bash
 sonor-rig list                 # what's installed / running / healthy

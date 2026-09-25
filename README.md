@@ -20,6 +20,8 @@ sonor-rig doctor                throttling, temp, displays, FTDI adapters, sessi
 sonor-rig add <name>            scaffold apps.d/<name>.app for the next project
 ```
 
+Panel: boots to the **launcher** (one tile per app, tap to switch, ⌂ to come back) — bench-only, see below.
+
 ## How it works
 
 ```
@@ -31,8 +33,12 @@ session/…session.sh      runs in the desktop login: Chromium kiosk on the fron
 ~/sonor/<app>/           the checkouts, exactly as a dedicated Pi would have them
 ```
 
-`sonor-rig use X` writes one file; the session loop swaps the kiosk and the display program within
-two seconds. Every project's services keep running unless you say `only`. Per-app systemd drop-ins in
+`sonor-rig use X` writes one file; the session loop swaps the display program within two seconds and
+the **launcher** — the panel's home screen (`session/launcher.py`, 127.0.0.1:8700) — follows it. The
+panel boots to a grid of app tiles with live status; tap one to make it the front app, it opens
+full-screen inside the launcher, and the ⌂ tab in the corner brings the grid back while
+everything keeps running. Headless apps get START / STOP / RESTART on their tile. `LAUNCHER=0` in
+`/etc/sonor-rig/rig.env` restores the plain kiosk-on-the-app behaviour. Every project's services keep running unless you say `only`. Per-app systemd drop-ins in
 `/etc/systemd/system/<unit>.service.d/sonor-rig.conf` are the *only* rig-specific change to how a
 project runs (the Fractal web UI on 8081, `$ARGS` from an env file) — the project repos are untouched.
 
@@ -57,4 +63,4 @@ PORTS), `bash tests/test_rig.sh`, commit. The tests fail on a listening-port cla
 ## Tests
 
 `bash tests/test_rig.sh` — no Pi, no root, no network: syntax + shellcheck, every app file sources
-cleanly, port-clash check, and the CLI's read-only commands against a temp copy. 17 checks.
+cleanly, port-clash check, and the CLI's read-only commands against a temp copy, launcher compile + --dump. 19 checks.

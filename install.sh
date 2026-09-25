@@ -42,6 +42,8 @@ KIOSK_SIZE=1024,600          # the touch panel (ROADOM 7" = 1024x600)
 RENDER_DISPLAY=1             # SDL display index for the Fractal renderer (0 = panel, 1 = second HDMI)
 RENDER_ARGS=                 # extra renderer args, e.g. --window 1280x720 to test it on the panel itself
 CHROME_EXTRA_FLAGS=
+LAUNCHER=1                   # 1 = panel boots to the rig launcher (tile per app, tap to switch); 0 = kiosk straight on the front app
+LAUNCHER_PORT=8700           # launcher listens on 127.0.0.1 only
 EOF
   chmod 644 "$ETC/rig.env"
 
