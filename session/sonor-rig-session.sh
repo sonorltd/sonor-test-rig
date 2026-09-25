@@ -25,6 +25,7 @@ CHROME="$(command -v chromium || command -v chromium-browser || true)"
 FLAGS="--kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-translate
  --overscroll-history-navigation=0 --touch-events=enabled --enable-features=OverlayScrollbar
  --check-for-update-interval=31536000 --autoplay-policy=no-user-gesture-required
+ --password-store=basic --no-first-run --disable-features=TranslateUI,GnomeKeyring
  --window-size=${KIOSK_SIZE:-1024,600} --window-position=0,0 ${CHROME_EXTRA_FLAGS:-}"
 
 # keep the panel awake (X11 + Wayland variants; harmless where absent)
