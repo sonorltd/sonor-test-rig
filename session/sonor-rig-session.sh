@@ -56,7 +56,8 @@ load_front() {   # sets NAME URL SESSION APP_PATH from the current front app (""
   . "$APPS_D/$NAME.app"
   APP_PATH="$RIG_ROOT/${DIR:-$NAME}"
 }
-start_chrome()  { [ -n "$URL" ] || return; log "kiosk → $URL"; "$CHROME" $FLAGS --app="$URL" "$URL" >/dev/null 2>&1 & CHROME_PID=$!; }
+chrome_alive()  { { [ -n "$CHROME_PID" ] && kill -0 "$CHROME_PID" 2>/dev/null; } || pgrep -f -- "--app=$URL" >/dev/null 2>&1; }
+start_chrome()  { [ -n "$URL" ] || return; chrome_alive && return; log "kiosk → $URL"; "$CHROME" $FLAGS --app="$URL" "$URL" >/dev/null 2>&1 & CHROME_PID=$!; }
 outputs_on() { { wlr-randr 2>/dev/null || xrandr 2>/dev/null; } | grep -cE '^[A-Za-z]+-[A-Za-z]*-?[0-9]+ |^[A-Za-z0-9-]+ connected' ; }
 start_session() {
   [ -n "$SESSION" ] || return
@@ -79,7 +80,7 @@ while true; do
   if [ "$LAUNCHER" = 1 ]; then
     # kiosk stays on the launcher across front-app changes (it follows /etc/sonor-rig/current itself);
     # only the SESSION program (renderer) is swapped here
-    URL="$LAUNCHER_URL"; [ -n "$CHROME_PID" ] && kill -0 "$CHROME_PID" 2>/dev/null || start_chrome
+    URL="$LAUNCHER_URL"; start_chrome
     [ -z "$NAME" ] || start_session
   elif [ -z "$NAME" ]; then
     log "no front app yet (sonor-rig use <app>) — showing the rig page"
@@ -90,7 +91,7 @@ while true; do
   while [ "$(stamp_of)" = "$STAMP" ]; do
     sleep 2
     if [ -n "$LAUNCHER_PID" ] && ! kill -0 "$LAUNCHER_PID" 2>/dev/null; then log "launcher died — restarting"; start_launcher; fi
-    if [ -n "$CHROME_PID" ] && ! kill -0 "$CHROME_PID" 2>/dev/null; then log "chromium died — restarting"; sleep 2; start_chrome; fi
+    if ! chrome_alive; then log "chromium died — restarting"; sleep 2; CHROME_PID=""; start_chrome; fi
     if [ -n "$SESSION_PID" ] && ! kill -0 "$SESSION_PID" 2>/dev/null; then log "session program died — restarting in 3 s"; sleep 3; start_session; fi
   done
   log "front app changed → $(cat "$ETC/current" 2>/dev/null)"
