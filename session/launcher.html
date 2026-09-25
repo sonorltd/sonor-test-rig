@@ -57,7 +57,7 @@
   <footer><span>tap an app to put it on this panel · ⌂ brings you back here · apps keep running</span><span class="spacer"></span><span id="foot"></span></footer>
 </div>
 
-<div id="app"><iframe id="frame" title="app" allow="autoplay; fullscreen"></iframe></div>
+<div id="app"><iframe id="frame" title="app" allow="autoplay"></iframe></div>
 <button id="home" title="back to apps">⌂</button>
 <div id="toast"></div>
 
@@ -74,10 +74,11 @@
     default: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 21 8v8l-9 5-9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>',
   };
   let shownFront = null, view = 'grid', busy = false, sig = '', first = true;
+  const mem = { get k() { try { return sessionStorage.getItem('rig.open'); } catch (e) { return null; } }, set k(v) { try { v ? sessionStorage.setItem('rig.open', v) : sessionStorage.removeItem('rig.open'); } catch (e) {} } };
 
   function toast(t, ms = 2500) { $('toast').textContent = t; $('toast').classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => $('toast').classList.remove('on'), ms); }
-  function openApp(a) { if (!a || !a.url) return; view = 'app'; if ($('frame').src !== a.url) $('frame').src = a.url; $('app').classList.add('on'); $('home').classList.add('on'); }
-  function goHome() { view = 'grid'; $('app').classList.remove('on'); $('home').classList.remove('on'); }
+  function openApp(a) { if (!a || !a.url) return; view = 'app'; mem.k = a.name; if ($('frame').src !== a.url) $('frame').src = a.url; $('app').classList.add('on'); $('home').classList.add('on'); }
+  function goHome() { view = 'grid'; mem.k = null; $('app').classList.remove('on'); $('home').classList.remove('on'); }
   $('home').addEventListener('click', goHome);
 
   async function api(path) {
@@ -133,7 +134,7 @@
       render(d);
       // boot: stay on the grid so the panel is a chooser. Later, `sonor-rig use X` from SSH changes the
       // front app: follow it onto the panel, like the plain kiosk did.
-      if (first) { first = false; shownFront = d.front || null; }
+      if (first) { first = false; shownFront = d.front || null; const was = mem.k; const a = was && d.apps.find(x => x.name === was); if (a && a.url) openApp(a); }
       else if (d.front && d.front !== shownFront) { shownFront = d.front; const a = d.apps.find(x => x.name === d.front); if (a && a.url && view === 'grid' && !busy) openApp(a); }
     } catch (e) { $('foot').textContent = 'launcher api unreachable'; }
   }
