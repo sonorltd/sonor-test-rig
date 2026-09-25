@@ -135,7 +135,7 @@
       <li>When asked "Would you like to apply OS customisation settings?" → <b>Edit settings</b>:
         <ul>
           <li>Hostname: <code>sonorpi</code></li>
-          <li>Username: <code>pi</code>, choose a password (write it on the handover sheet)</li>
+          <li>Username: <code>sonorpi</code> (same as the hostname), choose a password (write it on the handover sheet)</li>
           <li>Wi-Fi: only if there is no Ethernet; set country <b>GB</b></li>
           <li>Locale: timezone <code>Europe/London</code>, keyboard <code>gb</code></li>
           <li>Services tab: <b>Enable SSH</b>, password authentication</li>
@@ -147,12 +147,12 @@
 
   <div class="card" id="boot">
     <h2><span class="n">2</span> First boot — update and fetch the rig</h2>
-    <p>From the Mac/PC terminal (the Pi must be on the same network):</p>
-<pre><button class="copy">copy</button><code>ssh pi@sonorpi.local
-sudo apt update &amp;&amp; sudo apt full-upgrade -y &amp;&amp; sudo apt install -y git
+    <p>From the Mac/PC terminal (the Pi must be on the same network). Run the <code>ssh</code> line <b>on its own</b> and type the password when asked — if you paste several lines at once, the extra lines are fed to the password prompt as failed attempts. Then paste the rest:</p>
+<pre><button class="copy">copy</button><code>ssh sonorpi@sonorpi.local</code></pre>
+<pre><button class="copy">copy</button><code>sudo apt update &amp;&amp; sudo apt full-upgrade -y &amp;&amp; sudo apt install -y git
 mkdir -p ~/sonor &amp;&amp; git clone https://github.com/sonorltd/sonor-test-rig.git ~/sonor/test-rig
 cd ~/sonor/test-rig</code></pre>
-    <p class="muted">If <code>sonorpi.local</code> does not resolve, find the Pi's IP on the router (or on the Pi's desktop: hover the network icon) and use <code>ssh pi@&lt;ip&gt;</code>. The <code>full-upgrade</code> can take 10–15 minutes on a fresh image; a reboot after it is fine but not required.</p>
+    <p class="muted">If <code>sonorpi.local</code> does not resolve, find the Pi's IP on the router (or on the Pi's desktop: hover the network icon) and use <code>ssh sonorpi@&lt;ip&gt;</code>. The <code>full-upgrade</code> can take 10–15 minutes on a fresh image; a reboot after it is fine but not required.</p>
   </div>
 
   <div class="card" id="install">
@@ -171,15 +171,15 @@ sudo reboot</code></pre>
     <div class="note">Do <b>not</b> use the projects' <code>install-kiosk.sh</code> scripts on the rig — the rig's own session handles the kiosk. Those scripts are for dedicated field Pis.</div>
     <h3>If the Fractal Rig clone fails</h3>
     <p>The <code>sonor-fractal-rig</code> repository may be private. If <code>install.sh</code> reports it cannot clone it, either sign the Pi into GitHub first (<code>sudo apt install gh &amp;&amp; gh auth login</code>, then re-run the install command), or copy the project over from the Mac and re-run — the installer uses whatever it finds in place:</p>
-<pre><button class="copy">copy</button><code>scp -r "$HOME/Code/Sonor/STUDIO - Fractal Rig" pi@sonorpi.local:~/sonor/fractal-rig
-ssh pi@sonorpi.local sonor-rig install fractal</code></pre>
+<pre><button class="copy">copy</button><code>scp -r "$HOME/Code/Sonor/STUDIO - Fractal Rig" sonorpi@sonorpi.local:~/sonor/fractal-rig
+ssh sonorpi@sonorpi.local sonor-rig install fractal</code></pre>
   </div>
 
   <div class="card" id="private">
     <h2><span class="n">4</span> The private repos — C-Bus and eDIN+</h2>
     <p><code>sonor-cbus</code> is a private repository, so <code>sonor-rig install cbus</code> needs Git authentication on the Pi (<code>gh auth login</code>, or a deploy key). The simpler route is to copy it across from the Mac and let the installer use the copy:</p>
-<pre><button class="copy">copy</button><code>scp -r "$HOME/Code/Sonor/APP - C-Bus" pi@sonorpi.local:~/sonor/cbus
-ssh pi@sonorpi.local sonor-rig install cbus</code></pre>
+<pre><button class="copy">copy</button><code>scp -r "$HOME/Code/Sonor/APP - C-Bus" sonorpi@sonorpi.local:~/sonor/cbus
+ssh sonorpi@sonorpi.local sonor-rig install cbus</code></pre>
     <p>The C-Bus daemon starts in <b>simulator</b> mode. For a real PCI, edit <code>/etc/sonor-rig/cbus.env</code> and restart:</p>
 <pre><button class="copy">copy</button><code><span class="c"># 5500PC on an FTDI USB-serial adapter</span>
 ARGS=--serial /dev/ttyUSB0 --port 8765 --auth
@@ -224,7 +224,7 @@ sonor-rig use pixel     <span class="c"># back again — both daemons kept runni
       <tr><td><code>sonor-rig doctor</code></td><td>Throttling, temperature, displays, FTDI adapters, session loop.</td></tr>
       <tr><td><code>sonor-rig add &lt;name&gt;</code></td><td>Scaffold <code>apps.d/&lt;name&gt;.app</code> for the next project.</td></tr>
     </table></div>
-    <p class="muted">The <code>pi</code> user can run <code>sonor-rig</code> without a password prompt (a sudoers snippet the installer writes — it is a bench, not a site).</p>
+    <p class="muted">The <code>sonorpi</code> user can run <code>sonor-rig</code> without a password prompt (a sudoers snippet the installer writes — it is a bench, not a site).</p>
   </div>
 
   <div class="card" id="config">
@@ -282,7 +282,7 @@ sonor-rig use pixel     <span class="c"># back again — both daemons kept runni
     <h2>Troubleshooting</h2>
     <div class="tablewrap"><table>
       <tr><th>Symptom</th><th>Check / fix</th></tr>
-      <tr><td><code>ssh pi@sonorpi.local</code> can't find the host</td><td>Use the IP from the router. On Windows, mDNS may need Bonjour; on the same LAN <code>ping sonorpi.local</code> from a Mac usually works.</td></tr>
+      <tr><td><code>ssh sonorpi@sonorpi.local</code> can't find the host</td><td>Use the IP from the router. On Windows, mDNS may need Bonjour; on the same LAN <code>ping sonorpi.local</code> from a Mac usually works.</td></tr>
       <tr><td><code>install.sh</code> says "run with sudo"</td><td>It must be <code>sudo bash install.sh …</code>. It is safe to re-run.</td></tr>
       <tr><td>Clone of a project fails (auth / 404)</td><td>Private repo. <code>gh auth login</code> on the Pi, or <code>scp</code> the folder from the Mac into <code>~/sonor/&lt;dir&gt;</code> and run <code>sonor-rig install &lt;app&gt;</code> (see steps 3 and 4).</td></tr>
       <tr><td>Panel shows a desktop, no kiosk</td><td><code>sonor-rig doctor</code> → session loop. Re-install just the session bits: <code>cd ~/sonor/test-rig &amp;&amp; sudo bash install.sh --session-only</code>, then log out/in or reboot.</td></tr>
@@ -310,7 +310,7 @@ sonor-rig install hub</code></pre>
     <h2>Handover checklist</h2>
     <p>Tick these off and send the answers back with the rig. (The ticks are only stored in this browser.)</p>
     <ul class="check">
-      <li><input type="checkbox"> Imaged: Pi OS 64-bit <b>with desktop</b>, hostname <code>sonorpi</code>, user <code>pi</code>, SSH on. Password noted: ____________</li>
+      <li><input type="checkbox"> Imaged: Pi OS 64-bit <b>with desktop</b>, hostname <code>sonorpi</code>, user <code>sonorpi</code>, SSH on. Password noted: ____________</li>
       <li><input type="checkbox"> <code>sudo apt full-upgrade</code> completed</li>
       <li><input type="checkbox"> <code>install.sh --apps pixel,fractal --front pixel</code> completed without errors; rebooted</li>
       <li><input type="checkbox"> Panel boots into Pixel Conductor Perform mode; touch works</li>
