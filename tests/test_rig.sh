@@ -36,6 +36,14 @@ for f in "$ROOT"/apps.d/*.app; do
       grep -q 'APP_PATH' <<<"$blob" && { echo "\$APP_PATH not expanded in systemd text"; exit 1; }
       grep -q 'ExecStart=' <<<"$blob" || { echo "systemd text has no ExecStart"; exit 1; }
     done
+    # regression (2026-09-25): when DIR != NAME the drop-in must point at $RIG_ROOT/$DIR, not $RIG_ROOT/$NAME.
+    # The CLI re-sources the .app once DIR is known; mirror that here and check the path that lands in systemd.
+    DIR="${DIR:-$n}"; APP_PATH="$RIG_ROOT/$DIR"; . "$f"
+    for blob in "$DROPIN" "$UNIT_FILE"; do
+      [ -z "$blob" ] && continue
+      grep -q "$RIG_ROOT/$DIR" <<<"$blob" || grep -q '/opt/' <<<"$blob" || { echo "systemd text does not use \$RIG_ROOT/$DIR"; exit 1; }
+      [ "$DIR" = "$n" ] || ! grep -q "$RIG_ROOT/$n/" <<<"$blob" || { echo "systemd text still uses \$RIG_ROOT/$n (NAME) instead of $DIR"; exit 1; }
+    done
   ) && ok "$n.app" || bad "$n.app"
 done
 

@@ -152,6 +152,7 @@
 <pre><button class="copy">copy</button><code>sudo apt update &amp;&amp; sudo apt full-upgrade -y &amp;&amp; sudo apt install -y git
 mkdir -p ~/sonor &amp;&amp; git clone https://github.com/sonorltd/sonor-test-rig.git ~/sonor/test-rig
 cd ~/sonor/test-rig</code></pre>
+    <div class="note warn"><b>On Wi-Fi?</b> The upgrade includes <code>wpasupplicant</code>, whose setup step restarts Wi-Fi and drops your SSH session mid-upgrade (the screen freezes at "Setting up wpasupplicant", then "Connection closed"). Either plug Ethernet in for the build (the rig wants it anyway), or run the long steps inside <code>screen</code> so a drop can't kill them: <code>sudo apt install -y screen &amp;&amp; screen -S rig</code>, run the commands, and after any disconnect log back in and <code>screen -r rig</code>. If a session did die mid-upgrade: <code>sudo dpkg --configure -a</code> then re-run the upgrade line.</div>
     <p class="muted">If <code>sonorpi.local</code> does not resolve, find the Pi's IP on the router (or on the Pi's desktop: hover the network icon) and use <code>ssh sonorpi@&lt;ip&gt;</code>. The <code>full-upgrade</code> can take 10–15 minutes on a fresh image; a reboot after it is fine but not required.</p>
   </div>
 
@@ -283,6 +284,8 @@ sonor-rig use pixel     <span class="c"># back again — both daemons kept runni
     <div class="tablewrap"><table>
       <tr><th>Symptom</th><th>Check / fix</th></tr>
       <tr><td><code>ssh sonorpi@sonorpi.local</code> can't find the host</td><td>Use the IP from the router. On Windows, mDNS may need Bonjour; on the same LAN <code>ping sonorpi.local</code> from a Mac usually works.</td></tr>
+      <tr><td>SSH froze at "Setting up wpasupplicant" / "Connection closed by remote host"</td><td>Wi-Fi restart during the upgrade. Log back in, <code>sudo dpkg --configure -a</code>, re-run the upgrade line — inside <code>screen</code> or over Ethernet (see step 2).</td></tr>
+      <tr><td>A service shows <code>status=203/EXEC</code> in its unit status</td><td>The path in the systemd drop-in doesn't exist — fixed in sonor-rig 0.1.1 (<code>cd ~/sonor/test-rig &amp;&amp; git pull &amp;&amp; sonor-rig install &lt;app&gt;</code> rewrites the drop-in).</td></tr>
       <tr><td><code>install.sh</code> says "run with sudo"</td><td>It must be <code>sudo bash install.sh …</code>. It is safe to re-run.</td></tr>
       <tr><td>Clone of a project fails (auth / 404)</td><td>Private repo. <code>gh auth login</code> on the Pi, or <code>scp</code> the folder from the Mac into <code>~/sonor/&lt;dir&gt;</code> and run <code>sonor-rig install &lt;app&gt;</code> (see steps 3 and 4).</td></tr>
       <tr><td>Panel shows a desktop, no kiosk</td><td><code>sonor-rig doctor</code> → session loop. Re-install just the session bits: <code>cd ~/sonor/test-rig &amp;&amp; sudo bash install.sh --session-only</code>, then log out/in or reboot.</td></tr>

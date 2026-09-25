@@ -1,6 +1,6 @@
-# STUDIO - Test Rig (v0.1.0)
+# STUDIO - Test Rig (v0.1.1)
 
-> Current version: 0.1.0 · Repo: `sonor-test-rig` · No Pages (nothing to host — it's a Pi tool).
+> Current version: 0.1.1 · Repo: `sonor-test-rig` · Pages: https://sonorltd.github.io/sonor-test-rig/ (build guide only)
 > Type: side-project / infra (STUDIO class). Not a product; never installed on a field Pi.
 
 `sonor-rig` — one bench Pi 5 hosting every Sonor daemon project (Pixel Conductor, Fractal Rig, C-Bus daemon,
@@ -52,6 +52,12 @@ eDIN+ bridge, …) side by side, with the touch panel / HDMI switched between th
   desktop session loop (Chromium kiosk + front app's display program, watches `/etc/sonor-rig/current`,
   restarts crashed children, waiting page), `install.sh` bootstrap (apt, symlink, sudoers, autostart,
   auto-login, no-blank, `--apps`/`--front`), docs (BENCH, PORTS), 17 bash tests.
+- 2026-09-25 v0.1.1 — first real-hardware run (bench Pi `sonorpi`, user `sonorpi`, Wi-Fi). Fixed: `load_app`
+  sourced the `.app` file with `APP_PATH=$RIG_ROOT/$NAME`, so DROPIN/UNIT_FILE text baked in the wrong path
+  whenever `DIR != NAME` (pixel → `pixel-conductor`, 203/EXEC on the bench); now re-sources once DIR is known,
+  with a regression test. GitHub Pages build guide `docs/index.html` (Pages from `/docs`); docs use
+  `sonorpi@sonorpi.local`; ssh line on its own (pasted lines are eaten by the password prompt); Wi-Fi caveat —
+  `wpasupplicant` upgrades drop the session, so upgrade over Ethernet or inside `screen`.
 
 ## Pending / next (see IDEAS.md)
 - First real bench build on the Pi 5: confirm Chromium lands on HDMI-A-1 and the renderer on HDMI-A-2 under labwc.

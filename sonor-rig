@@ -23,7 +23,7 @@
 # Field Pis never see this script: they run each project's installer directly.
 set -euo pipefail
 
-RIG_VERSION="0.1.0"
+RIG_VERSION="0.1.1"
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 RIG_HOME="$(cd "$(dirname "$SELF")" && pwd)"
 APPS_D="$RIG_HOME/apps.d"
@@ -64,6 +64,11 @@ load_app() {
   . "$APPS_D/$name.app"
   [ "${NAME:-}" = "$name" ] || die "$name.app: NAME must be '$name' (got '${NAME:-}')"
   DIR="${DIR:-$name}"; APP_PATH="$RIG_ROOT/$DIR"
+  # DROPIN / UNIT_FILE / SESSION / NOTES expanded $APP_PATH when the file was first sourced, i.e. before
+  # DIR was known. When DIR != NAME (pixel → pixel-conductor) that path is wrong, so source once more
+  # with the real APP_PATH. All .app files are plain assignments, so re-sourcing is harmless.
+  # shellcheck disable=SC1090
+  . "$APPS_D/$name.app"
   [ -n "$UNITS" ] || warn "$name.app declares no UNITS"
   FIRST_UNIT="${UNITS%% *}"
 }
