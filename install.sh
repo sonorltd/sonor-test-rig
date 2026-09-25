@@ -64,8 +64,10 @@ X-GNOME-Autostart-enabled=true
 EOF
 grep -q "sonor-rig-session" "$HOME_DIR/.config/labwc/autostart" 2>/dev/null || echo "$SESSION &  # sonor-rig" >> "$HOME_DIR/.config/labwc/autostart"
 chown -R "$USER_NAME" "$HOME_DIR/.config/autostart" "$HOME_DIR/.config/labwc"
-# boot straight to the desktop as this user, screen never blanks
+# boot straight to the desktop as this user, screen never blanks, and no first-run "Welcome to Raspberry Pi
+# Desktop" wizard sitting in front of the kiosk (Imager's customisation doesn't always suppress it)
 command -v raspi-config >/dev/null && raspi-config nonint do_boot_behaviour B4 || true
+rm -f /etc/xdg/autostart/piwiz.desktop
 grep -q consoleblank /boot/firmware/cmdline.txt 2>/dev/null || sed -i 's/$/ consoleblank=0/' /boot/firmware/cmdline.txt || true
 mkdir -p /etc/xdg/autostart
 printf '[Desktop Entry]\nType=Application\nName=sonor-rig no-blank\nExec=sh -c "xset s off; xset -dpms; xset s noblank"\n' > /etc/xdg/autostart/sonor-rig-noblank.desktop
