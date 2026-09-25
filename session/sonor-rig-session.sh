@@ -56,7 +56,19 @@ load_front() {   # sets NAME URL SESSION APP_PATH from the current front app (""
   APP_PATH="$RIG_ROOT/${DIR:-$NAME}"
 }
 start_chrome()  { [ -n "$URL" ] || return; log "kiosk → $URL"; "$CHROME" $FLAGS --app="$URL" "$URL" >/dev/null 2>&1 & CHROME_PID=$!; }
-start_session() { [ -n "$SESSION" ] || return; log "session → $SESSION (in $APP_PATH)"; ( cd "$APP_PATH" && exec bash -c "$SESSION" ) >>"$LOG" 2>&1 & SESSION_PID=$!; }
+outputs_on() { { wlr-randr 2>/dev/null || xrandr 2>/dev/null; } | grep -cE '^[A-Za-z]+-[A-Za-z]*-?[0-9]+ |^[A-Za-z0-9-]+ connected' ; }
+start_session() {
+  [ -n "$SESSION" ] || return
+  # A display program (the Fractal renderer) goes fullscreen on SDL display RENDER_DISPLAY. If that output
+  # isn't plugged in, SDL falls back to display 0 = the touch panel and fights the kiosk for the GPU
+  # (fractal flashes up, then Chromium goes white). So: no second screen → no renderer, just a log line.
+  local want="${RENDER_DISPLAY:-1}" have; have="$(outputs_on)"; have="${have:-1}"
+  if [ -z "${RENDER_ARGS:-}" ] && [ "$have" -le "$want" ]; then
+    log "session program NOT started: RENDER_DISPLAY=$want but only $have display(s) connected (plug in HDMI-A-2, or set RENDER_DISPLAY=0 / RENDER_ARGS=--window 1024x600 in $ETC/rig.env)"
+    SESSION_PID=""; return
+  fi
+  log "session → $SESSION (in $APP_PATH)"; ( cd "$APP_PATH" && exec bash -c "$SESSION" ) >>"$LOG" 2>&1 & SESSION_PID=$!
+}
 
 stamp_of() { stat -c %Y "$ETC/current" 2>/dev/null || echo 0; }
 
