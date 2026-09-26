@@ -88,13 +88,17 @@ git_sync() {   # clone or fast-forward, as the rig user
   as_user "mkdir -p '$RIG_ROOT'"
   if [ -d "$APP_PATH/.git" ]; then
     say "  git pull  $APP_PATH"
-    as_user "cd '$APP_PATH' && git pull --ff-only ${BRANCH:+origin $BRANCH}" || warn "git pull failed (local changes? private repo auth?) — continuing with what's there"
+    as_user "cd '$APP_PATH' && GIT_TERMINAL_PROMPT=0 git pull --ff-only ${BRANCH:+origin $BRANCH}" || warn "git pull failed (local changes? private repo auth?) — continuing with what's there"
   elif [ -d "$APP_PATH" ]; then
     say "  $APP_PATH exists but is not a git checkout (copied in by hand?) — using it as-is"
   else
     [ -n "$REPO" ] || die "$NAME: no REPO and $APP_PATH does not exist — copy the project there by hand"
     say "  git clone $REPO → $APP_PATH"
-    as_user "git clone -q ${BRANCH:+-b $BRANCH} '$REPO' '$APP_PATH'" || die "clone failed. Private repo? Either 'gh auth login' / a deploy key on this Pi, or from the Mac:  scp -r <project> $RIG_USER@$(hostname).local:$APP_PATH"
+    # GIT_TERMINAL_PROMPT=0: a private repo fails at once instead of sitting on "Username for github.com"
+    if ! as_user "GIT_TERMINAL_PROMPT=0 git clone -q ${BRANCH:+-b $BRANCH} '$REPO' '$APP_PATH'"; then
+      warn "$NAME: clone failed (private repo?) — skipped. Either 'gh auth login' / a deploy key on this Pi, or from the Mac:  scp -r <project> $RIG_USER@$(hostname).local:$APP_PATH"
+      return 1
+    fi
   fi
 }
 
@@ -119,10 +123,11 @@ write_units() {
 cmd_install() {
   need_root install "$@"
   local targets=("${@:-all}"); [ "${targets[0]}" = all ] && mapfile -t targets < <(all_apps)
+  local SKIPPED=()
   for a in "${targets[@]}"; do
     load_app "$a"
     say "${B}== install $LABEL ($NAME)${N}"
-    git_sync
+    git_sync || { SKIPPED+=("$NAME"); continue; }     # a private repo we can't reach must not stop the others
     write_env_default            # env first — installers / drop-ins may read it
     if [ -n "$INSTALL" ]; then
       say "  running the project's own installer:  $INSTALL"
@@ -135,6 +140,7 @@ cmd_install() {
     ok "$LABEL installed"
   done
   if [ ! -f "$ETC/current" ]; then load_app "${targets[0]}"; [ -z "$URL" ] || cmd_use "$NAME"; fi
+  [ ${#SKIPPED[@]} -eq 0 ] || warn "skipped (not installed / not reachable): ${SKIPPED[*]}"
 }
 cmd_update() { cmd_install "$@"; }
 
